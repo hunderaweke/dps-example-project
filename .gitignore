@@ -1,0 +1,19 @@
+# Binaries and build output
+bin/
+*.exe
+*.test
+
+# Profiling, coverage and benchmark runs (keep the committed baseline)
+*.out
+*.prof
+coverage.*
+bench/*
+!bench/baseline.txt
+!bench/.gitkeep
+
+# Local env / editor
+.env
+.env.*
+.idea/
+.vscode/
+.DS_Store

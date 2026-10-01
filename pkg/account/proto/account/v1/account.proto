@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package account.v1;
+
+option go_package = "github.com/username/example-service/pkg/account/gen/account/v1;accountv1";
+
+// AccountService is an example contract for an external service this service
+// depends on. Replace it with the real contract (or import it from a shared
+// proto repository) in services created from this template.
+service AccountService {
+  rpc GetAccount(GetAccountRequest) returns (GetAccountResponse);
+}
+
+message GetAccountRequest {
+  string id = 1;
+}
+
+message GetAccountResponse {
+  string id = 1;
+  string name = 2;
+  bool active = 3;
+}

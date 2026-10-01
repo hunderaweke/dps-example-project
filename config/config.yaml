@@ -1,0 +1,48 @@
+# Defaults for local development (matches compose.dev.yml).
+# Override any key with an env var: APP_<SECTION>__<KEY>, e.g. APP_POSTGRES__URL.
+app:
+  name: example-service
+  environment: development
+  version: 0.1.0
+
+server:
+  host: 0.0.0.0
+  port: 8080
+  read_timeout: 10s
+  write_timeout: 10s
+  shutdown_timeout: 15s
+  cors_origins: ["*"]
+  pprof_port: 0 # set e.g. 6060 to expose net/http/pprof
+
+postgres:
+  url: postgres://postgres:postgres@localhost:5432/example?sslmode=disable
+  max_conns: 10
+  auto_migrate: true
+
+mongo:
+  uri: mongodb://localhost:27017
+  database: example
+
+valkey:
+  url: redis://localhost:6379/0
+  ttl: 5m
+
+kafka:
+  brokers: ["localhost:19092"]
+  consumer_group: example-service
+  topics:
+    example_created: example.created
+
+temporal:
+  host_port: localhost:7233
+  namespace: default
+  task_queue: example-service
+
+account:
+  address: localhost:9090
+  timeout: 3s
+
+telemetry:
+  enabled: false
+  otlp_endpoint: localhost:4317
+  sample_ratio: 1.0

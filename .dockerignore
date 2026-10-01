@@ -1,0 +1,17 @@
+.git
+.github
+.claude
+.idea
+.vscode
+bin
+bench
+docs
+tests/e2e
+tests/load
+*.md
+compose*.yml
+Makefile
+.env*
+*.out
+*.prof
+coverage*

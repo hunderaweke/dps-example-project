@@ -1,0 +1,17 @@
+version: "2"
+sql:
+  - engine: postgresql
+    schema: internal/const/migrations
+    queries: internal/const/queries
+    gen:
+      go:
+        package: db
+        out: internal/storage/repository/db
+        sql_package: pgx/v5
+        emit_interface: true
+        emit_json_tags: true
+        overrides:
+          - db_type: uuid
+            go_type: github.com/google/uuid.UUID
+          - db_type: timestamptz
+            go_type: time.Time

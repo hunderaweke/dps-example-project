@@ -1,0 +1,12 @@
+# mockery v3 — run `make mocks`. Generates testify mocks for every port
+# (interface) declared in internal/module into internal/module/mocks.
+all: true
+dir: "{{.InterfaceDir}}/mocks"
+filename: "mocks.go"
+pkgname: mocks
+structname: "{{.InterfaceName}}"
+template: testify
+template-data:
+  unroll-variadic: true
+packages:
+  github.com/username/example-service/internal/module: {}

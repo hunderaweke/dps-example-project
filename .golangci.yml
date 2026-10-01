@@ -1,0 +1,67 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: standard
+  enable:
+    - bodyclose
+    - depguard
+    - errorlint
+    - gocritic
+    - misspell
+    - unconvert
+  settings:
+    # depguard enforces the hexagonal dependency rule. See README "Architecture".
+    depguard:
+      rules:
+        domain:
+          files: ["**/internal/const/models/*.go"]
+          deny:
+            - pkg: github.com/username/example-service
+              desc: domain models are the innermost layer and must not import internal packages
+        core:
+          files: ["**/internal/module/*.go", "!$test"]
+          deny:
+            - { pkg: github.com/gin-gonic, desc: "core must not know HTTP; use internal/router" }
+            - { pkg: github.com/danielgtaylor/huma, desc: "core must not know HTTP; use internal/router" }
+            - { pkg: github.com/jackc/pgx, desc: "core must not know the database; declare a port" }
+            - { pkg: go.mongodb.org/mongo-driver, desc: "core must not know the database; declare a port" }
+            - { pkg: github.com/redis/go-redis, desc: "core must not know the cache; declare a port" }
+            - { pkg: github.com/twmb/franz-go, desc: "core must not know Kafka; declare a port" }
+            - { pkg: go.temporal.io, desc: "core must not know Temporal; declare a port" }
+            - { pkg: google.golang.org/grpc, desc: "core must not know gRPC; declare a port" }
+            - { pkg: github.com/username/example-service/internal/storage, desc: "core depends on ports, not adapters" }
+            - { pkg: github.com/username/example-service/internal/router, desc: "core must not import inbound adapters" }
+            - { pkg: github.com/username/example-service/internal/handler, desc: "core must not import inbound adapters" }
+            - { pkg: github.com/username/example-service/pkg, desc: "core depends on ports, not client SDKs" }
+            - { pkg: github.com/username/example-service/initiator, desc: "only main imports the composition root" }
+        inbound:
+          files: ["**/internal/router/*.go", "**/internal/handler/**/*.go"]
+          deny:
+            - { pkg: github.com/username/example-service/internal/storage, desc: "inbound adapters call the module, never storage" }
+        sdk:
+          files: ["**/pkg/**/*.go"]
+          deny:
+            - { pkg: github.com/username/example-service/internal, desc: "pkg/ must stay importable by other services" }
+  exclusions:
+    generated: lax
+    paths:
+      - internal/storage/repository/db
+      - internal/module/mocks
+      - pkg/account/gen
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/username/example-service
+  exclusions:
+    paths:
+      - internal/storage/repository/db
+      - internal/module/mocks
+      - pkg/account/gen
