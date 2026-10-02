@@ -35,5 +35,6 @@ Reference files:
    - `env.ExecuteWorkflow(fn, input)`, then assert `IsWorkflowCompleted()` and `GetWorkflowError()`
    - Test the non-retryable path with `.Once()` on the mock and `errors.As(err, *temporal.ApplicationError)` → `NonRetryable()`.
 6. Tracing is automatic: the client's OTel interceptor applies to the worker too.
+7. **Benchmarks** (see `add-benchmark`): benchmark each activity as a plain method call with a stub module in `internal/handler/workflow/<name>_bench_test.go`, and each module method it calls in `internal/module`. Do not benchmark the workflow function.
 
 Verify: `make lint test`. Locally, `make dev-up run-worker` and watch it in the Temporal UI (http://localhost:8233).

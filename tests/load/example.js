@@ -2,7 +2,7 @@
 // (BASE_URL defaults to the API on the host).
 //
 // Each virtual user creates an example, then reads it back twice (the second
-// read should be a cache hit). Thresholds fail the run on regressions.
+// read should be a cache hit), then lists one page. Thresholds fail the run on regressions.
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 
@@ -24,6 +24,7 @@ export const options = {
     http_req_failed: ['rate<0.01'],
     'http_req_duration{name:create}': ['p(95)<250'],
     'http_req_duration{name:get}': ['p(95)<100'],
+    'http_req_duration{name:list}': ['p(95)<200'],
   },
 };
 
@@ -40,5 +41,8 @@ export default function () {
     const got = http.get(`${BASE_URL}/v1/examples/${id}`, { tags: { name: 'get' } });
     check(got, { 'get is 200': (r) => r.status === 200 });
   }
+
+  const listed = http.get(`${BASE_URL}/v1/examples?limit=20`, { tags: { name: 'list' } });
+  check(listed, { 'list is 200': (r) => r.status === 200 });
   sleep(0.5);
 }

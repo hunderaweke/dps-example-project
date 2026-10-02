@@ -34,4 +34,5 @@ Read the `architecture-rules` skill first.
     - `internal/module/order_test.go`: table of cases with `mocks.New...(t)` and `EXPECT()`.
     - `internal/router/order_test.go`: status codes, and a check that 422 never reaches the module.
     - `tests/e2e/features/order_rest.feature` plus new steps in `tests/e2e/steps_test.go`.
-11. Verify: `make generate lint test test-e2e`. Then `make openapi` and check the new operations in `docs/openapi.yaml`.
+11. **Benchmarks** (see `add-benchmark`): `internal/module/order_bench_test.go` with in-memory fakes for each use case, `internal/router/order_bench_test.go` for each operation, and k6 requests with thresholds in `tests/load/`.
+12. Verify: `make generate lint test test-e2e`. Then `make openapi` and check the new operations in `docs/openapi.yaml`.

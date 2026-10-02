@@ -38,7 +38,9 @@ These rules are enforced by `depguard` in `.golangci.yml`. Always run `make lint
   It may use `models`, `errors`, `validator`, `zap` and `uuid`.
 - `internal/router` and `internal/handler/**` must **not** import `internal/storage`. They call the module through its port.
 - `pkg/**` must **not** import `internal/**`.
-- Only `cmd/*` imports `initiator`.
+- Only `cmd/*` imports `initiator`. The one exception is `tests/e2e`, which uses `initiator.BuildAPI`.
+- `internal/const/dto` must **not** import `internal/storage`, `internal/const/{database,cache,messaging,workflow}` or any infrastructure driver.
+- `internal/const/{database,cache,messaging,workflow}` may be imported only by `initiator/` and `internal/storage/**`.
 
 ## Conventions
 
@@ -62,3 +64,4 @@ These rules are enforced by `depguard` in `.golangci.yml`. Always run `make lint
 - [ ] `make generate` if SQL, proto or ports changed
 - [ ] `make lint` (architecture rules) passes
 - [ ] `make test` passes
+- [ ] Benchmark added or updated if a use case, endpoint, handler, activity or adapter changed (see `add-benchmark`). Run `make bench-compare` if `bench/baseline.txt` exists.

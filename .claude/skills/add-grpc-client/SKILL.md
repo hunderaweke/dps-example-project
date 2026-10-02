@@ -30,4 +30,6 @@ Reference files:
 8. **Local dev** (optional): a stub server in `tests/stubs/<svc>/main.go` that implements `Unimplemented<Svc>ServiceServer`, plus a Dockerfile stage and a `compose.dev.yml` service, as for `account-stub`.
 9. **Tests**: module tests mock the port. For the adapter, use `google.golang.org/grpc/test/bufconn` with a fake server to test code mapping.
 
+10. **Benchmark** (see `add-benchmark`): benchmark the adapter's mapping over `bufconn` with a fake server in `internal/storage/<svc>/<svc>_bench_test.go`.
+
 Verify: `make proto lint test`.

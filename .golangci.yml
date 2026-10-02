@@ -45,6 +45,39 @@ linters:
           files: ["**/pkg/**/*.go"]
           deny:
             - { pkg: github.com/username/example-service/internal, desc: "pkg/ must stay importable by other services" }
+        composition-root:
+          # e2e tests build the real API in-process via initiator.BuildAPI.
+          files: ["$all", "!**/cmd/**", "!**/initiator/**", "!**/tests/e2e/**"]
+          deny:
+            - { pkg: github.com/username/example-service/initiator, desc: "only cmd/* imports the composition root" }
+        dto:
+          files: ["**/internal/const/dto/*.go"]
+          deny:
+            - { pkg: github.com/username/example-service/internal/storage, desc: "DTOs are transport shapes; they must not know storage" }
+            - { pkg: github.com/username/example-service/internal/const/database, desc: "DTOs must not know infrastructure" }
+            - { pkg: github.com/username/example-service/internal/const/cache, desc: "DTOs must not know infrastructure" }
+            - { pkg: github.com/username/example-service/internal/const/messaging, desc: "DTOs must not know infrastructure" }
+            - { pkg: github.com/username/example-service/internal/const/workflow, desc: "DTOs must not know infrastructure" }
+            - { pkg: github.com/jackc/pgx, desc: "DTOs must not know infrastructure" }
+            - { pkg: go.mongodb.org/mongo-driver, desc: "DTOs must not know infrastructure" }
+            - { pkg: github.com/redis/go-redis, desc: "DTOs must not know infrastructure" }
+            - { pkg: github.com/twmb/franz-go, desc: "DTOs must not know infrastructure" }
+            - { pkg: go.temporal.io, desc: "DTOs must not know infrastructure" }
+            - { pkg: google.golang.org/grpc, desc: "DTOs must not know infrastructure" }
+        infra-clients:
+          files:
+            - "$all"
+            - "!**/initiator/**"
+            - "!**/internal/storage/**"
+            - "!**/internal/const/database/**"
+            - "!**/internal/const/cache/**"
+            - "!**/internal/const/messaging/**"
+            - "!**/internal/const/workflow/**"
+          deny:
+            - { pkg: github.com/username/example-service/internal/const/database, desc: "infrastructure clients are only for initiator and internal/storage" }
+            - { pkg: github.com/username/example-service/internal/const/cache, desc: "infrastructure clients are only for initiator and internal/storage" }
+            - { pkg: github.com/username/example-service/internal/const/messaging, desc: "infrastructure clients are only for initiator and internal/storage" }
+            - { pkg: github.com/username/example-service/internal/const/workflow, desc: "infrastructure clients are only for initiator and internal/storage" }
   exclusions:
     generated: lax
     paths:

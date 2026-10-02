@@ -34,6 +34,7 @@ Reference files: `internal/const/dto/example.go`, `internal/router/example.go`, 
    - each mapped error status.
 7. **E2E**: add a scenario to `tests/e2e/features/<domain>_rest.feature`. Reuse the steps in `tests/e2e/steps_test.go` or add new ones there.
 8. **Docs**: `make openapi` updates `docs/openapi.yaml`. You can browse it at `http://localhost:8080/docs`.
-9. **Load**: if the endpoint is hot, add it to `tests/load/example.js` with a `tags: { name: '...' }` and a threshold.
+9. **Benchmark**: add a router benchmark in `internal/router/<domain>_bench_test.go` (`newServer(stub)`, check the status inside the loop). If the module method is new, add a core benchmark too. See `add-benchmark`.
+10. **Load**: if the endpoint is user-facing, add it to `tests/load/example.js` with a `tags: { name: '...' }` and a threshold.
 
 Verify: `make lint test test-e2e openapi`.

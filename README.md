@@ -10,6 +10,7 @@ It ships one complete example: an `Example` entity that you create over REST. It
 
 1. [Stack](#1-stack)
 2. [Architecture: how concerns are separated](#2-architecture-how-concerns-are-separated)
+   - Runtime design: [docs/architecture.md](docs/architecture.md)
 3. [Project layout](#3-project-layout)
 4. [Getting started](#4-getting-started)
 5. [Configuration](#5-configuration)
@@ -53,6 +54,8 @@ Dev tools are pinned in `go.mod` with the `tool` directive (Go 1.24+), so `go to
 ---
 
 ## 2. Architecture: how concerns are separated
+
+> Runtime design (sequence diagrams, deployment, data and event catalog, roadmap): [docs/architecture.md](docs/architecture.md).
 
 ### 2.1 The idea
 
@@ -118,18 +121,18 @@ flowchart LR
 | `internal/const/models` | Domain | Entities, value objects, events, `validate` tags | stdlib, `uuid` | anything internal, any infra library |
 | `internal/const/errors` | Domain | Error taxonomy (errorx types) and HTTP status mapping | `errorx` | adapters |
 | `internal/module` | Core (application) | Declares ports. Implements use cases. Validates domain rules | `models`, `errors`, `validator`, `zap` | gin, huma, pgx, mongo, go-redis, franz-go, temporal, grpc, `storage`, `router`, `handler`, `pkg`, `initiator` |
-| `internal/const/dto` | Inbound adapter (HTTP shapes) | Request/response structs with Huma tags. Converts to/from models | `models` | `storage`, `module` |
+| `internal/const/dto` | Inbound adapter (HTTP shapes) | Request/response structs with Huma tags. Converts to/from models | `models` | `storage`, `module`, platform clients, infra drivers |
 | `internal/router` | Inbound adapter (HTTP) | Registers Huma operations. Maps DTO ↔ model. Maps errors → HTTP | `module` (ports), `dto`, huma, gin | `storage` |
 | `internal/handler/event` | Inbound adapter (Kafka) | Poll loop, decoding, retry/poison handling | `module` (ports), franz-go | `storage` |
 | `internal/handler/workflow` | Inbound adapter (Temporal) and `WorkflowStarter` adapter | Workflows orchestrate; activities call the module. Maps errors → retry semantics | `module`, temporal | `storage` |
 | `internal/storage/*` | Outbound adapters | Implement ports. Translate driver errors into `errors` types | `module` (port interfaces), `models`, drivers | `router`, `handler` |
 | `internal/storage/repository/db` | Generated | sqlc output. **Do not edit** | | |
-| `internal/const/database`, `cache`, `messaging`, `workflow` | Platform clients | *How to connect* (pools, pings, tracing hooks). No business knowledge | `config`, drivers | `module` |
+| `internal/const/database`, `cache`, `messaging`, `workflow` | Platform clients | *How to connect* (pools, pings, tracing hooks). No business knowledge. Imported only by `initiator` and `internal/storage` | `config`, drivers | `module` |
 | `internal/const/migrations`, `queries` | Schema | golang-migrate files (also the sqlc schema) and sqlc queries | | |
 | `pkg/account` | Reusable SDK | gRPC client for an external service, importable by other services | grpc, generated code | `internal/...` |
 | `config` | Config | Typed config struct and loader | koanf | internal packages |
 | `initiator` | Composition root | Config → platform → adapters → modules → servers. Lifecycle and shutdown | everything | |
-| `cmd/*` | Entry points | `main()` calls `initiator` | `initiator` | |
+| `cmd/*` | Entry points | `main()` calls `initiator`. The only importer of `initiator`, apart from `tests/e2e` | `initiator` | |
 
 These rules are **enforced by the linter**. `.golangci.yml` has `depguard` rules, so for example importing pgx from `internal/module` fails `make lint`:
 
@@ -481,8 +484,10 @@ Benchmarks use Go 1.24's `b.Loop()` (setup is excluded automatically) and `b.Rep
 
 | Benchmark | Measures | Docker |
 |---|---|---|
-| `internal/module/example_bench_test.go` | Pure business logic with in-memory fakes (not mocks, which add reflection overhead) | no |
-| `internal/router/example_bench_test.go` | HTTP adapter cost: routing, Huma decode/validate, DTO mapping, JSON encode | no |
+| `internal/module/example_bench_test.go` | Pure business logic with in-memory fakes (not mocks, which add reflection overhead): API use cases (create, get, list) and worker use cases (handle created, verify owner, mark processed) | no |
+| `internal/router/example_bench_test.go` | HTTP adapter cost: routing, Huma decode/validate, DTO mapping, JSON encode (create, get, list at 20 and 100 items) | no |
+| `internal/handler/event/example_bench_test.go` | Kafka adapter cost: JSON decode and dispatch of `example.created` | no |
+| `internal/handler/workflow/example_bench_test.go` | Temporal activity adapter cost: ID parsing and error-to-retry mapping | no |
 | `internal/storage/cache/example_bench_test.go` | Valkey round-trip and JSON codec | yes |
 | `internal/storage/repository/example_bench_test.go` | Postgres create/get/list through sqlc + pgx | yes |
 
@@ -491,6 +496,8 @@ make bench                                   # all, 6 runs each → bench/curren
 make bench BENCH_PKGS=./internal/router      # one package
 go test -short -run='^$' -bench=. ./internal/...   # quick, skips docker benchmarks
 ```
+
+New or changed use cases, endpoints, handlers, activities and adapters ship with a benchmark in the same change. The rules are in `.claude/skills/add-benchmark` ("When a benchmark is required").
 
 ### 8.2 Detecting regressions with benchstat
 

@@ -2,6 +2,7 @@ package router_test
 
 import (
 	"bytes"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -38,5 +39,25 @@ func BenchmarkGetExample(b *testing.B) {
 		if rec.Code != http.StatusOK {
 			b.Fatalf("status %d", rec.Code)
 		}
+	}
+}
+
+// BenchmarkListExamples measures query-param binding and encoding a page of
+// results; response size grows with limit.
+func BenchmarkListExamples(b *testing.B) {
+	h := newServer(stubExample{})
+
+	for _, limit := range []int{20, 100} {
+		b.Run(fmt.Sprintf("limit_%d", limit), func(b *testing.B) {
+			path := fmt.Sprintf("/v1/examples?limit=%d", limit)
+			b.ReportAllocs()
+			for b.Loop() {
+				rec := httptest.NewRecorder()
+				h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+				if rec.Code != http.StatusOK {
+					b.Fatalf("status %d: %s", rec.Code, rec.Body.String())
+				}
+			}
+		})
 	}
 }

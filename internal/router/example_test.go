@@ -98,3 +98,16 @@ func (stubExample) Create(_ context.Context, ex models.Example) (models.Example,
 func (stubExample) Get(_ context.Context, id uuid.UUID) (models.Example, error) {
 	return models.Example{ID: id, Name: "bench", OwnerID: "acc_1", Status: models.ExampleStatusPending}, nil
 }
+
+// stubPage is built once so BenchmarkListExamples measures encoding, not setup.
+var stubPage = func() []models.Example {
+	items := make([]models.Example, 100)
+	for i := range items {
+		items[i] = models.Example{ID: uuid.New(), Name: "bench", OwnerID: "acc_1", Status: models.ExampleStatusPending}
+	}
+	return items
+}()
+
+func (stubExample) List(_ context.Context, page models.Page) ([]models.Example, error) {
+	return stubPage[:min(int(page.Limit), len(stubPage))], nil
+}

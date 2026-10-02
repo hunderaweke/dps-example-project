@@ -1,6 +1,6 @@
 ---
 name: add-benchmark
-description: Benchmark and profile code in this Go service - b.Loop micro-benchmarks per hexagonal layer, benchstat baseline comparison, pprof CPU/heap profiling (benchmarks and live admin port), and k6 load tests with thresholds. Use when asked about performance, latency, allocations, regressions, profiling or load testing.
+description: Benchmark and profile code in this Go service - b.Loop micro-benchmarks per hexagonal layer, benchstat baseline comparison, pprof CPU/heap profiling (benchmarks and live admin port), and k6 load tests with thresholds. Use when asked about performance, latency, allocations, regressions, profiling or load testing, AND proactively whenever you add or change a use case, endpoint, Kafka handler, Temporal activity or storage adapter (see "When a benchmark is required").
 ---
 
 # Benchmarks, profiling and load tests
@@ -8,8 +8,27 @@ description: Benchmark and profile code in this Go service - b.Loop micro-benchm
 Reference files:
 - `internal/module/example_bench_test.go` (core, in-memory fakes)
 - `internal/router/example_bench_test.go` (HTTP adapter)
+- `internal/handler/event/example_bench_test.go` (Kafka handler: decode + dispatch)
+- `internal/handler/workflow/example_bench_test.go` (Temporal activities as plain calls)
 - `internal/storage/{cache,repository}/example_bench_test.go` (adapters via testcontainers)
 - `tests/load/example.js` (k6)
+
+## When a benchmark is required
+
+Add or update a benchmark in the **same change**, without being asked, when you:
+
+| You change... | Add a benchmark in |
+|---|---|
+| a use case in `internal/module` (new method or new logic) | `internal/module/<domain>_bench_test.go`, in-memory fakes |
+| an HTTP operation or its DTO | `internal/router/<domain>_bench_test.go`, plus a k6 request with a threshold if the endpoint is user-facing |
+| a Kafka handler in `internal/handler/event` | `internal/handler/event/<domain>_bench_test.go` |
+| a Temporal activity | `internal/handler/workflow/<domain>_bench_test.go` (call the activity directly, not via the test environment) |
+| a storage adapter or a hot SQL query | `internal/storage/<kind>/<domain>_bench_test.go` (testcontainers, skipped with `-short`) |
+| code you claim is faster or allocates less | a benchmark that shows it, and a benchstat comparison |
+
+Not required for: wiring in `initiator/`, config, generated code, workflow functions (deterministic orchestration only), or pure renames.
+
+When `bench/baseline.txt` exists, run `make bench-compare BENCH_PKGS=<touched packages>` before finishing and report any significant regression (`p < 0.05`). Otherwise, smoke-run with `go test -run='^$' -bench=. -benchtime=100x <pkgs>` to prove the benchmarks pass.
 
 ## Writing a micro-benchmark
 

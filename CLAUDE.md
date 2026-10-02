@@ -1,6 +1,6 @@
 # example-service
 
-Go 1.27 service template using **hexagonal architecture** (ports and adapters). Read `README.md` §2 for the full architecture.
+Go 1.27 service template using **hexagonal architecture** (ports and adapters). Read `README.md` §2 for the full architecture and `docs/architecture.md` for runtime flows, deployment and the roadmap.
 
 ## Must know
 
@@ -15,6 +15,7 @@ Go 1.27 service template using **hexagonal architecture** (ports and adapters). 
   - `pkg/*/gen` (`make proto`)
 - Errors: adapters wrap driver errors into `internal/const/errors` types. The router maps them with `HTTPStatus`.
 - Validation: Huma tags at the edge, `validator` tags and checks in the core.
+- Benchmarks: a new or changed use case, endpoint, Kafka handler, activity or storage adapter ships with a `b.Loop` benchmark in the same change. The rules are in the `add-benchmark` skill.
 
 ## Skills (`.claude/skills/`)
 

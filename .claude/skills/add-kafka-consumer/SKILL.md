@@ -35,6 +35,8 @@ Reference files:
    - module unit tests for `HandleX` with mocks;
    - for the publisher, an e2e step like `eventPublished` in `tests/e2e/steps_test.go` that reads the topic from the start and matches the key.
 
+9. **Benchmarks** (see `add-benchmark`): a handler benchmark in `internal/handler/event/<domain>_bench_test.go` (decode + dispatch to a stub module) and a core benchmark for `HandleX`.
+
 Guaranteed delivery: if the publish must not be lost after a DB write, implement a transactional outbox (see README §2.11).
 
 Verify: `make lint test test-e2e`. Locally, check messages in Redpanda Console (http://localhost:8081).
