@@ -14,9 +14,9 @@ import (
 	"go.temporal.io/sdk/worker"
 	"go.temporal.io/sdk/workflow"
 
-	apperrors "github.com/username/example-service/internal/const/errors"
-	"github.com/username/example-service/internal/const/models"
-	"github.com/username/example-service/internal/module"
+	apperrors "github.com/hunderaweke/dps-audit-service/internal/const/errors"
+	"github.com/hunderaweke/dps-audit-service/internal/const/models"
+	"github.com/hunderaweke/dps-audit-service/internal/module"
 )
 
 const ProcessExampleWorkflowName = "ProcessExampleWorkflow"

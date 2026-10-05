@@ -19,7 +19,7 @@ linters:
         domain:
           files: ["**/internal/const/models/*.go"]
           deny:
-            - pkg: github.com/username/example-service
+            - pkg: github.com/hunderaweke/dps-audit-service
               desc: domain models are the innermost layer and must not import internal packages
         core:
           files: ["**/internal/module/*.go", "!$test"]
@@ -32,32 +32,32 @@ linters:
             - { pkg: github.com/twmb/franz-go, desc: "core must not know Kafka; declare a port" }
             - { pkg: go.temporal.io, desc: "core must not know Temporal; declare a port" }
             - { pkg: google.golang.org/grpc, desc: "core must not know gRPC; declare a port" }
-            - { pkg: github.com/username/example-service/internal/storage, desc: "core depends on ports, not adapters" }
-            - { pkg: github.com/username/example-service/internal/router, desc: "core must not import inbound adapters" }
-            - { pkg: github.com/username/example-service/internal/handler, desc: "core must not import inbound adapters" }
-            - { pkg: github.com/username/example-service/pkg, desc: "core depends on ports, not client SDKs" }
-            - { pkg: github.com/username/example-service/initiator, desc: "only main imports the composition root" }
+            - { pkg: github.com/hunderaweke/dps-audit-service/internal/storage, desc: "core depends on ports, not adapters" }
+            - { pkg: github.com/hunderaweke/dps-audit-service/internal/router, desc: "core must not import inbound adapters" }
+            - { pkg: github.com/hunderaweke/dps-audit-service/internal/handler, desc: "core must not import inbound adapters" }
+            - { pkg: github.com/hunderaweke/dps-audit-service/pkg, desc: "core depends on ports, not client SDKs" }
+            - { pkg: github.com/hunderaweke/dps-audit-service/initiator, desc: "only main imports the composition root" }
         inbound:
           files: ["**/internal/router/*.go", "**/internal/handler/**/*.go"]
           deny:
-            - { pkg: github.com/username/example-service/internal/storage, desc: "inbound adapters call the module, never storage" }
+            - { pkg: github.com/hunderaweke/dps-audit-service/internal/storage, desc: "inbound adapters call the module, never storage" }
         sdk:
           files: ["**/pkg/**/*.go"]
           deny:
-            - { pkg: github.com/username/example-service/internal, desc: "pkg/ must stay importable by other services" }
+            - { pkg: github.com/hunderaweke/dps-audit-service/internal, desc: "pkg/ must stay importable by other services" }
         composition-root:
           # e2e tests build the real API in-process via initiator.BuildAPI.
           files: ["$all", "!**/cmd/**", "!**/initiator/**", "!**/tests/e2e/**"]
           deny:
-            - { pkg: github.com/username/example-service/initiator, desc: "only cmd/* imports the composition root" }
+            - { pkg: github.com/hunderaweke/dps-audit-service/initiator, desc: "only cmd/* imports the composition root" }
         dto:
           files: ["**/internal/const/dto/*.go"]
           deny:
-            - { pkg: github.com/username/example-service/internal/storage, desc: "DTOs are transport shapes; they must not know storage" }
-            - { pkg: github.com/username/example-service/internal/const/database, desc: "DTOs must not know infrastructure" }
-            - { pkg: github.com/username/example-service/internal/const/cache, desc: "DTOs must not know infrastructure" }
-            - { pkg: github.com/username/example-service/internal/const/messaging, desc: "DTOs must not know infrastructure" }
-            - { pkg: github.com/username/example-service/internal/const/workflow, desc: "DTOs must not know infrastructure" }
+            - { pkg: github.com/hunderaweke/dps-audit-service/internal/storage, desc: "DTOs are transport shapes; they must not know storage" }
+            - { pkg: github.com/hunderaweke/dps-audit-service/internal/const/database, desc: "DTOs must not know infrastructure" }
+            - { pkg: github.com/hunderaweke/dps-audit-service/internal/const/cache, desc: "DTOs must not know infrastructure" }
+            - { pkg: github.com/hunderaweke/dps-audit-service/internal/const/messaging, desc: "DTOs must not know infrastructure" }
+            - { pkg: github.com/hunderaweke/dps-audit-service/internal/const/workflow, desc: "DTOs must not know infrastructure" }
             - { pkg: github.com/jackc/pgx, desc: "DTOs must not know infrastructure" }
             - { pkg: go.mongodb.org/mongo-driver, desc: "DTOs must not know infrastructure" }
             - { pkg: github.com/redis/go-redis, desc: "DTOs must not know infrastructure" }
@@ -74,10 +74,10 @@ linters:
             - "!**/internal/const/messaging/**"
             - "!**/internal/const/workflow/**"
           deny:
-            - { pkg: github.com/username/example-service/internal/const/database, desc: "infrastructure clients are only for initiator and internal/storage" }
-            - { pkg: github.com/username/example-service/internal/const/cache, desc: "infrastructure clients are only for initiator and internal/storage" }
-            - { pkg: github.com/username/example-service/internal/const/messaging, desc: "infrastructure clients are only for initiator and internal/storage" }
-            - { pkg: github.com/username/example-service/internal/const/workflow, desc: "infrastructure clients are only for initiator and internal/storage" }
+            - { pkg: github.com/hunderaweke/dps-audit-service/internal/const/database, desc: "infrastructure clients are only for initiator and internal/storage" }
+            - { pkg: github.com/hunderaweke/dps-audit-service/internal/const/cache, desc: "infrastructure clients are only for initiator and internal/storage" }
+            - { pkg: github.com/hunderaweke/dps-audit-service/internal/const/messaging, desc: "infrastructure clients are only for initiator and internal/storage" }
+            - { pkg: github.com/hunderaweke/dps-audit-service/internal/const/workflow, desc: "infrastructure clients are only for initiator and internal/storage" }
   exclusions:
     generated: lax
     paths:
@@ -92,7 +92,7 @@ formatters:
   settings:
     goimports:
       local-prefixes:
-        - github.com/username/example-service
+        - github.com/hunderaweke/dps-audit-service
   exclusions:
     paths:
       - internal/storage/repository/db

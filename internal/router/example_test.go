@@ -17,11 +17,11 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 
-	apperrors "github.com/username/example-service/internal/const/errors"
-	"github.com/username/example-service/internal/const/models"
-	"github.com/username/example-service/internal/module"
-	"github.com/username/example-service/internal/module/mocks"
-	"github.com/username/example-service/internal/router"
+	apperrors "github.com/hunderaweke/dps-audit-service/internal/const/errors"
+	"github.com/hunderaweke/dps-audit-service/internal/const/models"
+	"github.com/hunderaweke/dps-audit-service/internal/module"
+	"github.com/hunderaweke/dps-audit-service/internal/module/mocks"
+	"github.com/hunderaweke/dps-audit-service/internal/router"
 )
 
 func newServer(m module.Example) http.Handler {

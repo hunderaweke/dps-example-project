@@ -19,13 +19,12 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 
-	"github.com/username/example-service/config"
-	"github.com/username/example-service/internal/const/cache/valkey"
-	"github.com/username/example-service/internal/const/database/mongo"
-	"github.com/username/example-service/internal/const/database/postgres"
-	"github.com/username/example-service/internal/const/messaging/kafka"
-	"github.com/username/example-service/internal/const/workflow/temporal"
-	"github.com/username/example-service/pkg/account"
+	"github.com/hunderaweke/dps-audit-service/config"
+	"github.com/hunderaweke/dps-audit-service/internal/const/cache/valkey"
+	"github.com/hunderaweke/dps-audit-service/internal/const/database/mongo"
+	"github.com/hunderaweke/dps-audit-service/internal/const/database/postgres"
+	"github.com/hunderaweke/dps-audit-service/internal/const/messaging/kafka"
+	"github.com/hunderaweke/dps-audit-service/internal/const/workflow/temporal"
 )
 
 // needs selects which platform clients a process connects to, so the API does
@@ -95,12 +94,6 @@ func newPlatform(ctx context.Context, cfg *config.Config, logger *zap.Logger, n 
 			return nil, err
 		}
 		p.onClose(func(context.Context) error { p.Temporal.Close(); return nil })
-	}
-	if n.Account {
-		if p.AccountConn, err = account.Dial(cfg.Account.Address); err != nil {
-			return nil, err
-		}
-		p.onClose(func(context.Context) error { return p.AccountConn.Close() })
 	}
 	return p, nil
 }

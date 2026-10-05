@@ -10,10 +10,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	apperrors "github.com/username/example-service/internal/const/errors"
-	"github.com/username/example-service/internal/const/models"
-	"github.com/username/example-service/internal/module"
-	"github.com/username/example-service/internal/storage/repository/db"
+	apperrors "github.com/hunderaweke/dps-audit-service/internal/const/errors"
+	"github.com/hunderaweke/dps-audit-service/internal/const/models"
+	"github.com/hunderaweke/dps-audit-service/internal/module"
+	"github.com/hunderaweke/dps-audit-service/internal/storage/repository/db"
 )
 
 type example struct {

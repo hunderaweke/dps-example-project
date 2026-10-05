@@ -10,10 +10,10 @@ import (
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/testsuite"
 
-	apperrors "github.com/username/example-service/internal/const/errors"
-	"github.com/username/example-service/internal/const/models"
-	"github.com/username/example-service/internal/handler/workflow"
-	"github.com/username/example-service/internal/module/mocks"
+	apperrors "github.com/hunderaweke/dps-audit-service/internal/const/errors"
+	"github.com/hunderaweke/dps-audit-service/internal/const/models"
+	"github.com/hunderaweke/dps-audit-service/internal/handler/workflow"
+	"github.com/hunderaweke/dps-audit-service/internal/module/mocks"
 )
 
 func TestProcessExampleWorkflow(t *testing.T) {

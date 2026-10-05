@@ -8,11 +8,11 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 
-	"github.com/username/example-service/config"
-	"github.com/username/example-service/internal/const/database/postgres"
-	"github.com/username/example-service/internal/const/models"
-	"github.com/username/example-service/internal/storage/repository"
-	"github.com/username/example-service/internal/storage/repository/db"
+	"github.com/hunderaweke/dps-audit-service/config"
+	"github.com/hunderaweke/dps-audit-service/internal/const/database/postgres"
+	"github.com/hunderaweke/dps-audit-service/internal/const/models"
+	"github.com/hunderaweke/dps-audit-service/internal/storage/repository"
+	"github.com/hunderaweke/dps-audit-service/internal/storage/repository/db"
 )
 
 // Adapter benchmarks run against a real Postgres in Docker; skipped with -short.

@@ -9,7 +9,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 	"go.mongodb.org/mongo-driver/v2/mongo/readpref"
 
-	"github.com/username/example-service/config"
+	"github.com/hunderaweke/dps-audit-service/config"
 )
 
 func NewClient(ctx context.Context, cfg config.Mongo) (*mongo.Client, *mongo.Database, error) {

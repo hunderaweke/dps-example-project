@@ -18,10 +18,10 @@ import (
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
-	"github.com/username/example-service/config"
-	"github.com/username/example-service/internal/const/messaging/kafka"
-	"github.com/username/example-service/internal/handler/event"
-	"github.com/username/example-service/internal/handler/workflow"
+	"github.com/hunderaweke/dps-audit-service/config"
+	"github.com/hunderaweke/dps-audit-service/internal/const/messaging/kafka"
+	"github.com/hunderaweke/dps-audit-service/internal/handler/event"
+	"github.com/hunderaweke/dps-audit-service/internal/handler/workflow"
 )
 
 // API bundles everything needed to serve HTTP. Exported so e2e tests can run

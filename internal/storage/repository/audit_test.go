@@ -10,10 +10,10 @@ import (
 	tcmongo "github.com/testcontainers/testcontainers-go/modules/mongodb"
 	"go.mongodb.org/mongo-driver/v2/bson"
 
-	"github.com/username/example-service/config"
-	"github.com/username/example-service/internal/const/database/mongo"
-	"github.com/username/example-service/internal/const/models"
-	"github.com/username/example-service/internal/storage/repository"
+	"github.com/hunderaweke/dps-audit-service/config"
+	"github.com/hunderaweke/dps-audit-service/internal/const/database/mongo"
+	"github.com/hunderaweke/dps-audit-service/internal/const/models"
+	"github.com/hunderaweke/dps-audit-service/internal/storage/repository"
 )
 
 // Integration test for the Mongo adapter; requires docker, skipped with -short.

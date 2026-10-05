@@ -16,8 +16,8 @@ import (
 	tcvalkey "github.com/testcontainers/testcontainers-go/modules/valkey"
 	"go.uber.org/zap"
 
-	"github.com/username/example-service/config"
-	"github.com/username/example-service/initiator"
+	"github.com/hunderaweke/dps-audit-service/config"
+	"github.com/hunderaweke/dps-audit-service/initiator"
 )
 
 const exampleCreatedTopic = "example.created"

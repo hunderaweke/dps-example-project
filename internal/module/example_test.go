@@ -11,10 +11,10 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	apperrors "github.com/username/example-service/internal/const/errors"
-	"github.com/username/example-service/internal/const/models"
-	"github.com/username/example-service/internal/module"
-	"github.com/username/example-service/internal/module/mocks"
+	apperrors "github.com/hunderaweke/dps-audit-service/internal/const/errors"
+	"github.com/hunderaweke/dps-audit-service/internal/const/models"
+	"github.com/hunderaweke/dps-audit-service/internal/module"
+	"github.com/hunderaweke/dps-audit-service/internal/module/mocks"
 )
 
 type deps struct {

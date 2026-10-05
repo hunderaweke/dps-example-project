@@ -11,9 +11,9 @@ import (
 	"github.com/danielgtaylor/huma/v2"
 	"go.uber.org/zap"
 
-	"github.com/username/example-service/internal/const/dto"
-	"github.com/username/example-service/internal/const/models"
-	"github.com/username/example-service/internal/module"
+	"github.com/hunderaweke/dps-audit-service/internal/const/dto"
+	"github.com/hunderaweke/dps-audit-service/internal/const/models"
+	"github.com/hunderaweke/dps-audit-service/internal/module"
 )
 
 type example struct {

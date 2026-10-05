@@ -3,15 +3,13 @@ package initiator
 import (
 	"go.uber.org/zap"
 
-	"github.com/username/example-service/config"
-	"github.com/username/example-service/internal/handler/workflow"
-	"github.com/username/example-service/internal/module"
-	accountadapter "github.com/username/example-service/internal/storage/account"
-	"github.com/username/example-service/internal/storage/cache"
-	"github.com/username/example-service/internal/storage/publisher"
-	"github.com/username/example-service/internal/storage/repository"
-	"github.com/username/example-service/internal/storage/repository/db"
-	"github.com/username/example-service/pkg/account"
+	"github.com/hunderaweke/dps-audit-service/config"
+	"github.com/hunderaweke/dps-audit-service/internal/handler/workflow"
+	"github.com/hunderaweke/dps-audit-service/internal/module"
+	"github.com/hunderaweke/dps-audit-service/internal/storage/cache"
+	"github.com/hunderaweke/dps-audit-service/internal/storage/publisher"
+	"github.com/hunderaweke/dps-audit-service/internal/storage/repository"
+	"github.com/hunderaweke/dps-audit-service/internal/storage/repository/db"
 )
 
 type Modules struct {
@@ -35,9 +33,6 @@ func newModules(cfg *config.Config, p *Platform, logger *zap.Logger) Modules {
 	}
 	if p.Temporal != nil {
 		deps.Workflows = workflow.NewStarter(p.Temporal, cfg.Temporal.TaskQueue)
-	}
-	if p.AccountConn != nil {
-		deps.Accounts = accountadapter.New(account.NewClient(p.AccountConn, cfg.Account.Timeout))
 	}
 	if p.MongoDB != nil {
 		deps.Audit = repository.NewAudit(p.MongoDB)

@@ -9,7 +9,7 @@ import (
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/plugin/kotel"
 
-	"github.com/username/example-service/config"
+	"github.com/hunderaweke/dps-audit-service/config"
 )
 
 // Tracer is shared by producer and consumer so consumers can continue the

@@ -13,7 +13,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 
-	apperrors "github.com/username/example-service/internal/const/errors"
+	apperrors "github.com/hunderaweke/dps-audit-service/internal/const/errors"
 )
 
 // HandlerFunc processes one record. Returning an ErrInvalidInput error marks

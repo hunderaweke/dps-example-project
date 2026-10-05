@@ -10,8 +10,8 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	tcvalkey "github.com/testcontainers/testcontainers-go/modules/valkey"
 
-	"github.com/username/example-service/internal/const/models"
-	"github.com/username/example-service/internal/storage/cache"
+	"github.com/hunderaweke/dps-audit-service/internal/const/models"
+	"github.com/hunderaweke/dps-audit-service/internal/storage/cache"
 )
 
 // Adapter benchmarks run against a real Valkey in Docker; skipped with -short.

@@ -8,8 +8,8 @@ import (
 	"context"
 
 	"github.com/google/uuid"
+	"github.com/hunderaweke/dps-audit-service/internal/const/models"
 	mock "github.com/stretchr/testify/mock"
-	"github.com/username/example-service/internal/const/models"
 )
 
 // NewExample creates a new instance of Example. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.

@@ -12,8 +12,8 @@ import (
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 
-	apperrors "github.com/username/example-service/internal/const/errors"
-	"github.com/username/example-service/internal/const/models"
+	apperrors "github.com/hunderaweke/dps-audit-service/internal/const/errors"
+	"github.com/hunderaweke/dps-audit-service/internal/const/models"
 )
 
 // ---- Inbound port (driven by router, Kafka handler, Temporal activities) ----

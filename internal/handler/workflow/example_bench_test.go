@@ -6,9 +6,9 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/username/example-service/internal/const/models"
-	"github.com/username/example-service/internal/handler/workflow"
-	"github.com/username/example-service/internal/module"
+	"github.com/hunderaweke/dps-audit-service/internal/const/models"
+	"github.com/hunderaweke/dps-audit-service/internal/handler/workflow"
+	"github.com/hunderaweke/dps-audit-service/internal/module"
 )
 
 // stubExample is a zero-overhead module so the benchmarks measure the

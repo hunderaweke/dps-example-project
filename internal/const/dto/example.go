@@ -9,7 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/username/example-service/internal/const/models"
+	"github.com/hunderaweke/dps-audit-service/internal/const/models"
 )
 
 type CreateExampleBody struct {

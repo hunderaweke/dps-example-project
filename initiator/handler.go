@@ -11,8 +11,8 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 	"go.uber.org/zap"
 
-	"github.com/username/example-service/config"
-	"github.com/username/example-service/internal/router"
+	"github.com/hunderaweke/dps-audit-service/config"
+	"github.com/hunderaweke/dps-audit-service/internal/router"
 )
 
 // newHTTPHandler builds the gin engine, global middleware and Huma API, and

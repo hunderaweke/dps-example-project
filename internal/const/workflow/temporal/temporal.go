@@ -10,7 +10,7 @@ import (
 	"go.temporal.io/sdk/interceptor"
 	"go.uber.org/zap"
 
-	"github.com/username/example-service/config"
+	"github.com/hunderaweke/dps-audit-service/config"
 )
 
 func NewClient(cfg config.Temporal, logger *zap.Logger) (client.Client, error) {

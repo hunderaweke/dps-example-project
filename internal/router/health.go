@@ -8,7 +8,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
-	"github.com/username/example-service/internal/const/dto"
+	"github.com/hunderaweke/dps-audit-service/internal/const/dto"
 )
 
 // Check reports whether one dependency is reachable.
