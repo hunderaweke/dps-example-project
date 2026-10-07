@@ -115,7 +115,7 @@ cover: ## Unit test coverage report (opens browser)
 	go tool cover -html=coverage.out
 
 ##@ Benchmarks
-.PHONY: bench bench-baseline bench-compare bench-profile bench-storage
+.PHONY: bench bench-baseline bench-compare bench-profile bench-storage bench-check bench-check-all bench-integration
 bench: ## Run benchmarks into bench/current.txt (BENCH_PKGS, BENCH_COUNT)
 	@mkdir -p bench
 	go test -run='^$$' -bench=. -benchmem -count=$(BENCH_COUNT) $(BENCH_PKGS) | tee bench/current.txt
@@ -131,6 +131,16 @@ bench-profile: ## CPU+memory profile one package and open pprof: make bench-prof
 	@mkdir -p bench
 	go test -run='^$$' -bench=. -benchmem -cpuprofile=bench/cpu.out -memprofile=bench/mem.out -o bench/pkg.test $(PKG)
 	go tool pprof -http=:0 bench/pkg.test bench/cpu.out
+
+bench-check: ## Fail if any benchmark budget is broken (no docker)
+	PERF_BUDGETS=1 go test -short -run=Budget -count=1 ./internal/...
+
+bench-check-all: ## Fail if any budget is broken, incl. Postgres and Redpanda (docker)
+	PERF_BUDGETS=1 go test -run=Budget -count=1 -timeout 30m ./internal/... ./tests/integration
+
+bench-integration: ## End-to-end Redpanda -> Postgres throughput benchmarks (docker; BENCH_COUNT)
+	@mkdir -p bench
+	go test -run='^$$' -bench=. -benchmem -count=$(BENCH_COUNT) -timeout 30m ./tests/integration | tee bench/integration.txt
 
 bench-storage: ## Audit storage benchmark, YSQL + S3 Object Lock + OpenSearch (docker; SB_PROFILE=quick|full)
 	STORAGEBENCH=1 SB_PROFILE=$(or $(SB_PROFILE),quick) go test ./tests/storagebench -run TestStorageBench -count=1 -timeout 4h -v

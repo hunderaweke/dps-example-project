@@ -21,7 +21,7 @@ type AuditConsumerConfig struct {
 	BatchSize       int           // records per Audit.Record call (default 500)
 	MaxPollRecords  int           // records per poll across partitions (default 5000)
 	RetryMaxBackoff time.Duration // cap of the retry backoff (default 30s)
-	MaxWorkers      int
+	MaxWorkers      int           // partitions written concurrently per poll (default 10)
 }
 
 // AuditConsumer feeds every DPS domain topic into the audit trail. Unlike the
@@ -71,22 +71,7 @@ func (c *AuditConsumer) Run(ctx context.Context) error {
 			c.logger.Error("fetch error", zap.String("topic", topic), zap.Int32("partition", partition), zap.Error(err))
 		})
 
-		fetches.EachPartition(func(p kgo.FetchTopicPartition) {
-			if len(p.Records) == 0 {
-				return
-			}
-			c.storePartition(ctx, p.Records)
-		})
-		var g errgroup.Group
-		g.SetLimit(c.cfg.MaxWorkers)
-		fetches.EachPartition(func(p kgo.FetchTopicPartition) {
-			if len(p.Records) == 0 {
-				return
-			}
-			g.Go(func() error { return c.storePartition(ctx, p.Records) })
-		})
-
-		if err := g.Wait(); err != nil {
+		if err := c.storeFetches(ctx, fetches); err != nil {
 			return nil
 		}
 		if err := c.client.CommitUncommittedOffsets(ctx); err != nil && ctx.Err() == nil {
@@ -94,6 +79,20 @@ func (c *AuditConsumer) Run(ctx context.Context) error {
 		}
 		c.client.AllowRebalance()
 	}
+}
+
+// storeFetches writes the poll's partitions concurrently, at most MaxWorkers
+// at a time, each in order. It only returns an error when ctx is cancelled.
+func (c *AuditConsumer) storeFetches(ctx context.Context, fetches kgo.Fetches) error {
+	var g errgroup.Group
+	g.SetLimit(c.cfg.MaxWorkers)
+	fetches.EachPartition(func(p kgo.FetchTopicPartition) {
+		if len(p.Records) == 0 {
+			return
+		}
+		g.Go(func() error { return c.storePartition(ctx, p.Records) })
+	})
+	return g.Wait()
 }
 
 // storePartition writes one partition's records in order, in batches. It only

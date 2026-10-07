@@ -106,6 +106,7 @@ type Audit struct {
 	BatchSize       int           `koanf:"batch_size"`
 	MaxPollRecords  int           `koanf:"max_poll_records"`
 	RetryMaxBackoff time.Duration `koanf:"retry_max_backoff"`
+	MaxWorkers      int           `koanf:"max_workers"`
 }
 
 type Temporal struct {

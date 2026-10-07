@@ -6,11 +6,15 @@ description: Benchmark and profile code in this Go service - b.Loop micro-benchm
 # Benchmarks, profiling and load tests
 
 Reference files:
+- `internal/testutil/perf` (budgets: `perf.Budget` and `perf.Enforce`, see "Budgets")
 - `internal/module/audit_bench_test.go` (core: `BenchmarkRecord` with the hand-written fake `nopLog`)
-- `internal/storage/repository/audit_test.go` (adapter: `BenchmarkAuditRepository` over testcontainers Postgres, skipped with `-short`; a 100-record `Append` takes about 2.4 ms locally)
+- `internal/handler/event/audit_bench_test.go` (Kafka handler: `BenchmarkStorePartition`, `BenchmarkStoreFetches` over a built `kgo.Fetches`, fake `benchAudit` with a simulated store delay)
+- `internal/handler/event/envelope_bench_test.go` (`BenchmarkDecodeRecord`: valid, invalid and 64 KiB payloads)
+- `internal/storage/repository/audit_test.go` (adapter: `BenchmarkAuditRepository` over testcontainers Postgres, skipped with `-short`: append batches, duplicates, parallel appends, get)
+- `tests/integration/throughput_bench_test.go` (end to end: `BenchmarkConsumerThroughput`, Redpanda to Postgres events/s with the real worker; `make bench-integration`)
 - `tests/storagebench` (storage design comparison: YSQL write designs, S3 Object Lock segments, OpenSearch; `make bench-storage SB_PROFILE=quick|full`, results in `bench/storage/RESULTS.md`)
 
-There is **no router, Kafka handler or Temporal activity benchmark yet**, because none of those exist; the rules below say how to write them.
+There is **no router or Temporal activity benchmark yet**, because none of those exist; the rules below say how to write them.
 
 ## When a benchmark is required
 
@@ -48,6 +52,40 @@ Rules:
 - **Adapter benchmarks** need Docker. Guard them with `if testing.Short() { b.Skip(...) }`, start the container with testcontainers, and clean up with `testcontainers.CleanupContainer(b, ctr)`. Benchmark realistic batch sizes (audit writes batches, not single rows).
 - Use `b.Run("case", ...)` for variants, such as `batch_1` and `batch_100`, or `new` and `duplicate`.
 - Always check errors inside the loop. A benchmark of a failing path is meaningless.
+
+## Budgets (benchmarks that fail)
+
+Every benchmark is a row in a case table with a `perf.Budget`. One table drives both the benchmark and its gate:
+
+```go
+type recordCase struct {
+    name   string
+    batch  int
+    budget perf.Budget
+}
+
+var recordCases = []recordCase{
+    {name: "batch_100", batch: 100, budget: perf.Budget{MaxNsPerOp: 40 * time.Microsecond, MaxAllocsPerOp: 2}},
+}
+
+func (c recordCase) run(b *testing.B) { /* setup, b.ReportAllocs(), for b.Loop() {...} */ }
+
+func BenchmarkRecord(b *testing.B) {
+    for _, c := range recordCases { b.Run(c.name, c.run) }
+}
+
+func TestRecordBudget(t *testing.T) {
+    for _, c := range recordCases {
+        t.Run(c.name, func(t *testing.T) { perf.Enforce(t, "Record/"+c.name, c.run, c.budget) })
+    }
+}
+```
+
+- A budget can cap `MaxNsPerOp` and `MaxAllocsPerOp`, and set `MinPerSec` floors for rates reported with `b.ReportMetric` (`records/s`, `rows/s`, `events/s`). A zero field is not checked.
+- `perf.Enforce` skips unless `PERF_BUDGETS=1`, so `make test` is unaffected. It runs the case 3 times and checks the best run.
+- Name the budget test `Test<Name>Budget`: `make bench-check` (no docker) and `make bench-check-all` (docker) select them with `-run=Budget`.
+- **Setting a budget:** run the case with `-count=6`, take the benchstat median, then set ns/op to about 2× the median, a rate floor to about half, and allocs/op to the median plus 10% (allocations are deterministic, so a tight cap catches regressions). Note the machine and date above the table.
+- A broken budget is a regression to fix, not a number to raise. Raise it only when the slowdown is intended, and say why in the change.
 
 ## Comparing (benchstat)
 

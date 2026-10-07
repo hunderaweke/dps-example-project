@@ -35,7 +35,7 @@ const group = "audit.universal.test"
 var topics = []string{"ledger.events", "payment.events", "auth.events"}
 
 type harness struct {
-	t        *testing.T
+	t        testing.TB
 	cfg      *config.Config
 	db       *pgxpool.Pool
 	producer *kgo.Client
@@ -130,7 +130,7 @@ func TestAuditConsumer(t *testing.T) {
 	stop()
 }
 
-func setup(t *testing.T) *harness {
+func setup(t testing.TB) *harness {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute) // first run pulls images
 	defer cancel()

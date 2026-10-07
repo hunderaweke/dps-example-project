@@ -116,6 +116,7 @@ func BuildWorker(ctx context.Context, cfg *config.Config, logger *zap.Logger) (_
 		BatchSize:       cfg.Audit.BatchSize,
 		MaxPollRecords:  cfg.Audit.MaxPollRecords,
 		RetryMaxBackoff: cfg.Audit.RetryMaxBackoff,
+		MaxWorkers:      cfg.Audit.MaxWorkers,
 	}, logger.Named("consumer"))
 	return &Worker{Platform: p, Modules: mods, client: client, consumer: consumer}, nil
 }
