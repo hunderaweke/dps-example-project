@@ -1,8 +1,23 @@
+# Generates Go code for the DPS contracts this service consumes, from a tagged
+# dps-contracts release (see that repo's templates/buf.gen.service.yaml).
+# Generate with: make proto
 version: v2
+clean: true
+managed:
+  enabled: true
+  override:
+    - file_option: go_package_prefix
+      value: github.com/hunderaweke/dps-audit-service/pkg/dpsapi/gen
+inputs:
+  - git_repo: ssh://git@github.com/hunderaweke/dps-contracts.git
+    subdir: proto
+    # The contracts release to build against. Bump and regenerate to take a newer one.
+    tag: v0.1.0
+    # Audit decodes only the envelope: EventMetadata and what it imports.
+    paths:
+      - dps/common/v1
+      - dps/events/v1
 plugins:
   - local: ["go", "tool", "protoc-gen-go"]
-    out: pkg/account/gen
-    opt: paths=source_relative
-  - local: ["go", "tool", "protoc-gen-go-grpc"]
-    out: pkg/account/gen
+    out: pkg/dpsapi/gen
     opt: paths=source_relative

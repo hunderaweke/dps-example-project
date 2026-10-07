@@ -27,7 +27,6 @@ linters:
             - { pkg: github.com/gin-gonic, desc: "core must not know HTTP; use internal/router" }
             - { pkg: github.com/danielgtaylor/huma, desc: "core must not know HTTP; use internal/router" }
             - { pkg: github.com/jackc/pgx, desc: "core must not know the database; declare a port" }
-            - { pkg: go.mongodb.org/mongo-driver, desc: "core must not know the database; declare a port" }
             - { pkg: github.com/redis/go-redis, desc: "core must not know the cache; declare a port" }
             - { pkg: github.com/twmb/franz-go, desc: "core must not know Kafka; declare a port" }
             - { pkg: go.temporal.io, desc: "core must not know Temporal; declare a port" }
@@ -46,8 +45,9 @@ linters:
           deny:
             - { pkg: github.com/hunderaweke/dps-audit-service/internal, desc: "pkg/ must stay importable by other services" }
         composition-root:
-          # e2e tests build the real API in-process via initiator.BuildAPI.
-          files: ["$all", "!**/cmd/**", "!**/initiator/**", "!**/tests/e2e/**"]
+          # e2e and integration tests build the real API / worker in-process
+          # via initiator.BuildAPI and initiator.BuildWorker.
+          files: ["$all", "!**/cmd/**", "!**/initiator/**", "!**/tests/e2e/**", "!**/tests/integration/**"]
           deny:
             - { pkg: github.com/hunderaweke/dps-audit-service/initiator, desc: "only cmd/* imports the composition root" }
         dto:
@@ -59,7 +59,6 @@ linters:
             - { pkg: github.com/hunderaweke/dps-audit-service/internal/const/messaging, desc: "DTOs must not know infrastructure" }
             - { pkg: github.com/hunderaweke/dps-audit-service/internal/const/workflow, desc: "DTOs must not know infrastructure" }
             - { pkg: github.com/jackc/pgx, desc: "DTOs must not know infrastructure" }
-            - { pkg: go.mongodb.org/mongo-driver, desc: "DTOs must not know infrastructure" }
             - { pkg: github.com/redis/go-redis, desc: "DTOs must not know infrastructure" }
             - { pkg: github.com/twmb/franz-go, desc: "DTOs must not know infrastructure" }
             - { pkg: go.temporal.io, desc: "DTOs must not know infrastructure" }
@@ -83,7 +82,7 @@ linters:
     paths:
       - internal/storage/repository/db
       - internal/module/mocks
-      - pkg/account/gen
+      - pkg/dpsapi/gen
 
 formatters:
   enable:
@@ -97,4 +96,4 @@ formatters:
     paths:
       - internal/storage/repository/db
       - internal/module/mocks
-      - pkg/account/gen
+      - pkg/dpsapi/gen

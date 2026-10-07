@@ -11,13 +11,15 @@ import (
 	apperrors "github.com/hunderaweke/dps-audit-service/internal/const/errors"
 )
 
-type errorMapper struct {
+// errorMapper is shared by the business routes; the audit read API
+// (dps.audit.v1.AuditService) is its next user.
+type errorMapper struct { //nolint:unused // used once the read API routes land
 	logger *zap.Logger
 }
 
 // toHuma converts an application error to an RFC 9457 problem response. 5xx
 // details are logged but never returned to the client.
-func (m errorMapper) toHuma(ctx context.Context, err error) error {
+func (m errorMapper) toHuma(ctx context.Context, err error) error { //nolint:unused // see errorMapper
 	status := apperrors.HTTPStatus(err)
 	if status >= http.StatusInternalServerError {
 		m.logger.Error("request failed",

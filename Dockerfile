@@ -12,8 +12,7 @@ COPY . .
 
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/go-build \
     go build -trimpath -ldflags="-s -w" -o /out/api ./cmd/api && \
-    go build -trimpath -ldflags="-s -w" -o /out/worker ./cmd/worker && \
-    go build -trimpath -ldflags="-s -w" -o /out/account-stub ./tests/stubs/account
+    go build -trimpath -ldflags="-s -w" -o /out/worker ./cmd/worker
 
 # Shared runtime base: CA certs + default config, non-root user.
 # Migrations are embedded in the binary.
@@ -31,9 +30,3 @@ ENTRYPOINT ["/bin/api"]
 FROM runtime AS worker
 COPY --from=builder /out/worker /bin/worker
 ENTRYPOINT ["/bin/worker"]
-
-# Local-dev only: stub of the external account gRPC service.
-FROM runtime AS account-stub
-COPY --from=builder /out/account-stub /bin/account-stub
-EXPOSE 9090
-ENTRYPOINT ["/bin/account-stub"]

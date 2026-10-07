@@ -26,11 +26,10 @@ type Config struct {
 	App       App       `koanf:"app"`
 	Server    Server    `koanf:"server"`
 	Postgres  Postgres  `koanf:"postgres"`
-	Mongo     Mongo     `koanf:"mongo"`
 	Valkey    Valkey    `koanf:"valkey"`
 	Kafka     Kafka     `koanf:"kafka"`
 	Temporal  Temporal  `koanf:"temporal"`
-	Account   Account   `koanf:"account"`
+	Audit     Audit     `koanf:"audit"`
 	Telemetry Telemetry `koanf:"telemetry"`
 }
 
@@ -57,11 +56,6 @@ type Postgres struct {
 	AutoMigrate bool   `koanf:"auto_migrate"`
 }
 
-type Mongo struct {
-	URI      string `koanf:"uri"`
-	Database string `koanf:"database"`
-}
-
 type Valkey struct {
 	URL string        `koanf:"url"`
 	TTL time.Duration `koanf:"ttl"`
@@ -74,18 +68,50 @@ type Kafka struct {
 }
 
 type Topics struct {
-	ExampleCreated string `koanf:"example_created"`
+	// One topic per DPS producer. Defaults mirror internal/const/events.
+	Auth         string `koanf:"auth"`
+	Onboarding   string `koanf:"onboarding"`
+	Account      string `koanf:"account"`
+	Payment      string `koanf:"payment"`
+	TPI          string `koanf:"tpi"`
+	Ledger       string `koanf:"ledger"`
+	Fee          string `koanf:"fee"`
+	Airtime      string `koanf:"airtime"`
+	Utility      string `koanf:"utility"`
+	Airline      string `koanf:"airline"`
+	Notification string `koanf:"notification"`
+	AdminOps     string `koanf:"adminops"`
+	Fuel         string `koanf:"fuel"`
+	Lending      string `koanf:"lending"`
+	Assistant    string `koanf:"assistant"`
+	Ticketing    string `koanf:"ticketing"`
+	DWH          string `koanf:"dwh"`
+}
+
+// List returns the configured domain topics, skipping empty ones.
+func (t Topics) List() []string {
+	all := []string{t.Auth, t.Onboarding, t.Account, t.Payment, t.TPI, t.Ledger, t.Fee, t.Airtime,
+		t.Utility, t.Airline, t.Notification, t.AdminOps, t.Fuel, t.Lending, t.Assistant, t.Ticketing, t.DWH}
+	out := make([]string, 0, len(all))
+	for _, topic := range all {
+		if topic != "" {
+			out = append(out, topic)
+		}
+	}
+	return out
+}
+
+// Audit tunes the audit consumer.
+type Audit struct {
+	BatchSize       int           `koanf:"batch_size"`
+	MaxPollRecords  int           `koanf:"max_poll_records"`
+	RetryMaxBackoff time.Duration `koanf:"retry_max_backoff"`
 }
 
 type Temporal struct {
 	HostPort  string `koanf:"host_port"`
 	Namespace string `koanf:"namespace"`
 	TaskQueue string `koanf:"task_queue"`
-}
-
-type Account struct {
-	Address string        `koanf:"address"`
-	Timeout time.Duration `koanf:"timeout"`
 }
 
 type Telemetry struct {

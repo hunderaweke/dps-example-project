@@ -1,107 +1,76 @@
-# example-service
+# dps-audit-service
 
-A production-ready **Go service template** built on **hexagonal architecture** (ports and adapters). Clone it, run `make rename`, delete the example slice, and build your own domain.
+The audit service of Project DPS, the Oromia Bank digital banking platform (requirements: DPS-UCS-P1-001 v1.4 §2.14).
 
-It ships one complete example: an `Example` entity that you create over REST. It is stored in Postgres, cached in Valkey and announced on Kafka. A worker consumes the event, runs a Temporal workflow that checks the owner over gRPC, writes an audit record to MongoDB and marks the entity as processed. Every pattern you need is shown once, end to end.
+It consumes every DPS domain event from Redpanda and keeps **one append-only record per event**. It is a Go 1.27 service built on **hexagonal architecture** (ports and adapters), with the import rules enforced by depguard.
+
+> **Status.** The domain model, the `Audit` use case, the YSQL storage adapter, the schema, the event catalog and the audit Kafka consumer (`cmd/worker`, never drops a record, commits only after the store) are built and tested, including against Redpanda in containers. The WORM copy in Ceph, the OpenSearch indexer and the read API are planned. See [§8 Roadmap](#8-roadmap).
+
+Runtime design (flows, deployment, data and event catalog, risks): [docs/architecture.md](docs/architecture.md).
 
 ---
 
 ## Table of contents
 
-1. [Stack](#1-stack)
-2. [Architecture: how concerns are separated](#2-architecture-how-concerns-are-separated)
-   - Runtime design: [docs/architecture.md](docs/architecture.md)
+1. [What the service does](#1-what-the-service-does)
+2. [Architecture](#2-architecture)
 3. [Project layout](#3-project-layout)
-4. [Getting started](#4-getting-started)
+4. [Running locally](#4-running-locally)
 5. [Configuration](#5-configuration)
-6. [Recipes](#6-recipes)
-7. [Testing strategy](#7-testing-strategy)
-8. [Benchmarking and performance](#8-benchmarking-and-performance)
-9. [Observability](#9-observability)
-10. [Using this as a template](#10-using-this-as-a-template)
-11. [Make targets](#11-make-targets)
-12. [Claude Code skills](#12-claude-code-skills)
+6. [Testing and benchmarks](#6-testing-and-benchmarks)
+7. [Design decisions](#7-design-decisions)
+8. [Roadmap](#8-roadmap)
+9. [Extending the service](#9-extending-the-service)
+10. [Make targets](#10-make-targets)
 
 ---
 
-## 1. Stack
+## 1. What the service does
 
-| Concern | Library | Why |
-|---|---|---|
-| HTTP router | [gin](https://github.com/gin-gonic/gin) | Fast, ubiquitous, large middleware ecosystem |
-| API + OpenAPI | [huma v2](https://huma.rocks) (`humagin` adapter) | Typed handlers; generates the OpenAPI 3.1 spec and validates input from struct tags |
-| CORS | [gin-contrib/cors](https://github.com/gin-contrib/cors) | Standard CORS middleware |
-| Config | [koanf v2](https://github.com/knadh/koanf) | YAML file plus env overrides, small dependency tree |
-| Logging | [zap](https://github.com/uber-go/zap) | Structured, very low overhead |
-| Postgres | [pgx v5](https://github.com/jackc/pgx) + [sqlc](https://sqlc.dev) | Type-safe Go generated from plain SQL. No ORM magic |
-| Migrations | [golang-migrate](https://github.com/golang-migrate/migrate) | Versioned up/down SQL, embedded in the binary |
-| Document store | [mongo-driver v2](https://github.com/mongodb/mongo-go-driver) | Official driver |
-| Cache | [go-redis v9](https://github.com/redis/go-redis) → [Valkey](https://valkey.io) | Valkey is wire-compatible with Redis |
-| Messaging | [franz-go](https://github.com/twmb/franz-go) → [Redpanda](https://redpanda.com) | Pure Go, fastest Kafka client, Kafka-API compatible broker |
-| Workflows | [Temporal Go SDK](https://github.com/temporalio/sdk-go) | Durable, retryable orchestration |
-| gRPC | [grpc-go](https://github.com/grpc/grpc-go) + [buf](https://buf.build) | Contract-first clients |
-| Domain validation | [validator v10](https://github.com/go-playground/validator) | Validates entities and events inside the core |
-| Errors | [errorx](https://github.com/joomcode/errorx) | Typed error taxonomy with wrapping and traits |
-| IDs | [google/uuid](https://github.com/google/uuid) | |
-| Tracing | [OpenTelemetry](https://opentelemetry.io) (otelgin, otelgrpc, otelpgx, redisotel, kotel, Temporal interceptor) | One trace across HTTP → Kafka → Temporal → gRPC |
-| Unit tests | [testify](https://github.com/stretchr/testify) + [mockery v3](https://vektra.github.io/mockery) | Generated mocks for every port |
-| E2E tests | [godog](https://github.com/cucumber/godog) + [testcontainers-go](https://golang.testcontainers.org) | Gherkin features against real infrastructure |
-| Benchmarks | `testing.B` + [benchstat](https://pkg.go.dev/golang.org/x/perf/cmd/benchstat) + pprof + [k6](https://k6.io) | Micro to load |
-| Lint | [golangci-lint v2](https://golangci-lint.run) | Includes `depguard` rules that **enforce the architecture** |
-
-Dev tools are pinned in `go.mod` with the `tool` directive (Go 1.24+), so `go tool <name>` always runs the same version for everyone: buf, protoc-gen-go(-grpc), mockery, migrate, benchstat, golangci-lint. sqlc and k6 run through Docker images pinned in the Makefile.
+| Concern | Behaviour |
+|---|---|
+| Input | Every DPS domain topic, `<domain>.events` (17 domains, 123 event types), in consumer group `audit.universal`. The event type is in the `x-dps-event-type` record header. |
+| Record | One `AuditRecord` per event: envelope metadata (event ID and type, aggregate, producer, correlation and causation IDs, actor, channel, occurred-at), the Kafka position, and the payload exactly as received. |
+| Dedupe | The primary key is the producer's `EventMetadata.event_id`, so a redelivered or re-published event is a no-op. An undecodable record gets `kafka:<topic>/<partition>/<offset>` and the Kafka timestamp, and is still kept (`metadata_valid=false`). |
+| Append-only | The trigger `audit_records_append_only` refuses `UPDATE` and `DELETE`, even for the table owner. |
+| Tamper evidence (planned) | A WORM copy in Ceph RGW S3 Object Lock (Compliance mode), segments per partition every 1–5 s. |
+| Search | Aggregate and correlation lookups from the database. Actor, event-type and ad-hoc search from OpenSearch (planned). |
+| Read API (planned) | `dps.audit.v1.AuditService`, read-only, in `cmd/api`. |
 
 ---
 
-## 2. Architecture: how concerns are separated
+## 2. Architecture
 
-> Runtime design (sequence diagrams, deployment, data and event catalog, roadmap): [docs/architecture.md](docs/architecture.md).
+### 2.1 Layers
 
-### 2.1 The idea
-
-Hexagonal architecture puts the **business logic (the core)** in the middle. The core declares **ports**: Go interfaces describing what it offers and what it needs. Everything that touches the outside world is an **adapter** that implements or calls a port.
-
-- **Inbound (driving) adapters** turn external input into calls on the core. Here that is HTTP, Kafka records and Temporal activities.
-- **Outbound (driven) adapters** implement the interfaces the core needs. Here that is Postgres, Mongo, Valkey, the Kafka publisher, the Temporal starter and the gRPC account client.
-
-The core never knows which adapters exist. You can swap Postgres for something else, or HTTP for gRPC, without touching a line of business logic. You can also unit-test the core with in-memory mocks in microseconds.
+The **core** (`internal/module`) holds the use case and declares **ports**: Go interfaces for what it offers and what it needs. Everything that touches the outside world is an **adapter**. The core never knows which adapters exist, so it is unit-tested with mocks and the store can change without touching business logic.
 
 ```mermaid
 flowchart LR
-    subgraph Inbound["Inbound adapters (driving)"]
-        R["internal/router<br/>HTTP · Huma/gin"]
-        E["internal/handler/event<br/>Kafka consumer"]
-        W["internal/handler/workflow<br/>Temporal activities"]
+    subgraph Inbound["Inbound adapters"]
+        R["internal/router<br/>health.go · errors.go<br/>(Huma on gin)"]
+        E["internal/handler/event<br/>audit.go · envelope.go<br/>consumer.go (generic)"]
     end
 
     subgraph Core["Application core"]
-        IP(["Inbound port<br/>module.Example"])
-        M["internal/module<br/>use cases"]
-        D["internal/const/models<br/>entities · events"]
-        OP(["Outbound ports<br/>ExampleRepository · ExampleCache<br/>EventPublisher · WorkflowStarter<br/>AccountClient · AuditStore"])
+        IP(["Inbound port<br/>module.Audit<br/>Record · Get"])
+        M["internal/module/audit.go"]
+        D["internal/const/models/audit.go<br/>AuditRecord · Actor · Page"]
+        OP(["Outbound port<br/>module.AuditLog<br/>Append · Get"])
     end
 
-    subgraph Outbound["Outbound adapters (driven)"]
-        PG["storage/repository<br/>Postgres · sqlc"]
-        MG["storage/repository/audit<br/>MongoDB"]
-        VK["storage/cache<br/>Valkey"]
-        PB["storage/publisher<br/>Kafka"]
-        ST["handler/workflow/starter<br/>Temporal client"]
-        AC["storage/account → pkg/account<br/>gRPC"]
+    subgraph Outbound["Outbound adapters"]
+        PG["internal/storage/repository/audit.go<br/>Postgres / YSQL · sqlc"]
+        WORM["Ceph Object Lock segments<br/>(planned)"]
     end
 
-    R --> IP
-    E --> IP
-    W --> IP
+    E -.-> IP
+    R -. read API, planned .-> IP
     IP --> M
     M --> D
     M --> OP
     OP -. implemented by .-> PG
-    OP -. implemented by .-> MG
-    OP -. implemented by .-> VK
-    OP -. implemented by .-> PB
-    OP -. implemented by .-> ST
-    OP -. implemented by .-> AC
+    OP -. planned .-> WORM
 
     I["initiator/<br/>composition root"] -. wires .-> Inbound
     I -. wires .-> Core
@@ -110,119 +79,47 @@ flowchart LR
 
 ### 2.2 The dependency rule
 
-> **Source code dependencies point inward.** Adapters depend on the core. The core depends only on the domain. Nothing depends on `initiator` except `main`.
+> **Source code dependencies point inward.** Adapters depend on the core. The core depends only on the domain. Nothing depends on `initiator` except `cmd/*` (and `tests/e2e`, `tests/integration`).
 
-`initiator/` is the **composition root**, the *only* package that knows every concrete type. It builds the platform clients, plugs adapters into ports and starts the processes.
+`initiator/` is the **composition root**, the only package that knows every concrete type. `initiator/module.go` builds `Modules{Audit}` by plugging `repository.NewAudit(db.New(pool))` into `module.NewAudit(AuditDeps{Log, Logger})`.
 
-### 2.3 Layer by layer
+| Folder | Layer | Audit files | Must **not** import |
+|---|---|---|---|
+| `internal/const/models` | Domain | `audit.go` | any internal package, any infra library |
+| `internal/const/errors` | Domain | `errors.go` (errorx types, `HTTPStatus`) | adapters |
+| `internal/module` | Core | `audit.go` (ports `Audit`, `AuditLog`; `NewAudit`) | gin, huma, pgx, go-redis, franz-go, temporal, grpc, `storage`, `router`, `handler`, `pkg`, `initiator` |
+| `internal/const/dto` | Inbound (HTTP shapes) | `health.go` | `storage`, platform clients, infra drivers |
+| `internal/router` | Inbound (HTTP) | `health.go`, `errors.go`, `middleware.go` | `storage` |
+| `internal/handler/event` | Inbound (Kafka) | `audit.go` (`AuditConsumer`), `envelope.go` (`decodeRecord`), `consumer.go` (generic) | `storage` |
+| `internal/storage/repository` | Outbound | `audit.go` | `router`, `handler` |
+| `internal/storage/repository/db` | Generated by sqlc. **Do not edit** | | |
+| `internal/const/{database,cache,messaging,workflow}` | Platform clients (how to connect) | | `module`. Imported only by `initiator` and `internal/storage` |
+| `internal/const/events` | Event catalog (names, topics, consumer group) | one file per domain, `events.go` | |
+| `internal/const/migrations`, `queries` | Schema and sqlc queries | `000001_audit.{up,down}.sql`, `audit.sql` | |
+| `pkg/dpsapi/gen` | Generated dps-contracts code (`make proto`). **Do not edit** | | `internal/...` |
+| `initiator` | Composition root | | |
 
-| Folder | Layer | Responsibility | May import | Must **not** import |
-|---|---|---|---|---|
-| `internal/const/models` | Domain | Entities, value objects, events, `validate` tags | stdlib, `uuid` | anything internal, any infra library |
-| `internal/const/errors` | Domain | Error taxonomy (errorx types) and HTTP status mapping | `errorx` | adapters |
-| `internal/module` | Core (application) | Declares ports. Implements use cases. Validates domain rules | `models`, `errors`, `validator`, `zap` | gin, huma, pgx, mongo, go-redis, franz-go, temporal, grpc, `storage`, `router`, `handler`, `pkg`, `initiator` |
-| `internal/const/dto` | Inbound adapter (HTTP shapes) | Request/response structs with Huma tags. Converts to/from models | `models` | `storage`, `module`, platform clients, infra drivers |
-| `internal/router` | Inbound adapter (HTTP) | Registers Huma operations. Maps DTO ↔ model. Maps errors → HTTP | `module` (ports), `dto`, huma, gin | `storage` |
-| `internal/handler/event` | Inbound adapter (Kafka) | Poll loop, decoding, retry/poison handling | `module` (ports), franz-go | `storage` |
-| `internal/handler/workflow` | Inbound adapter (Temporal) and `WorkflowStarter` adapter | Workflows orchestrate; activities call the module. Maps errors → retry semantics | `module`, temporal | `storage` |
-| `internal/storage/*` | Outbound adapters | Implement ports. Translate driver errors into `errors` types | `module` (port interfaces), `models`, drivers | `router`, `handler` |
-| `internal/storage/repository/db` | Generated | sqlc output. **Do not edit** | | |
-| `internal/const/database`, `cache`, `messaging`, `workflow` | Platform clients | *How to connect* (pools, pings, tracing hooks). No business knowledge. Imported only by `initiator` and `internal/storage` | `config`, drivers | `module` |
-| `internal/const/migrations`, `queries` | Schema | golang-migrate files (also the sqlc schema) and sqlc queries | | |
-| `pkg/account` | Reusable SDK | gRPC client for an external service, importable by other services | grpc, generated code | `internal/...` |
-| `config` | Config | Typed config struct and loader | koanf | internal packages |
-| `initiator` | Composition root | Config → platform → adapters → modules → servers. Lifecycle and shutdown | everything | |
-| `cmd/*` | Entry points | `main()` calls `initiator`. The only importer of `initiator`, apart from `tests/e2e` | `initiator` | |
-
-These rules are **enforced by the linter**. `.golangci.yml` has `depguard` rules, so for example importing pgx from `internal/module` fails `make lint`:
+These rules are **enforced by the linter**: `.golangci.yml` has depguard rule sets (`domain`, `core`, `inbound`, `sdk`, `composition-root`, `dto`, `infra-clients`), listed in [docs/architecture.md §4.3](docs/architecture.md#43-import-rule-enforcement). Importing pgx from `internal/module` fails `make lint`:
 
 ```
 internal/module/x.go:3:8: import 'github.com/jackc/pgx/v5' is not allowed from list 'core':
 core must not know the database; declare a port (depguard)
 ```
 
-### 2.4 Where ports live and why
+### 2.3 Ports, validation and errors
 
-Ports are declared **in the package that uses them** (`internal/module/example.go`), not next to their implementations. This is the Go way: *accept interfaces, return structs*. The core owns its contracts, and adapters assert conformance at compile time:
+- **Ports live with their user.** `module.AuditLog` is declared in `internal/module/audit.go`, not next to the repository. The adapter asserts conformance at compile time (`var _ module.AuditLog = ...`).
+- **Validation.** Huma tags validate HTTP shapes at the edge. `validator` tags on `models.AuditRecord` (`EventID`, `EventType`, `OccurredAt`, `Topic` are required; `Payload` may be empty) are checked in the core whatever the entry point; a failure becomes `ErrInvalidInput`.
+- **Errors.** Only adapters know driver errors. The repository maps `pgx.ErrNoRows` to `ErrNotFound` and other driver errors to `ErrDBWrite` / `ErrDBRead`. The router maps app errors with `apperrors.HTTPStatus`; 5xx details are logged with the trace ID and never sent to the client.
 
-```go
-var _ module.ExampleRepository = (*example)(nil)
-```
+### 2.4 Two processes, one codebase
 
-### 2.5 Validation: two layers, two jobs
-
-| Where | Tool | Validates | Example |
-|---|---|---|---|
-| Edge (`dto`, `router`) | Huma struct tags (`minLength`, `maximum`, `format`) | **Shape** of HTTP input. Fails fast with `422` before the core runs | `name` is a string of 3-100 chars |
-| Core (`models`, `module`) | `validator/v10` tags + code | **Business invariants**, whatever the entry point (HTTP, Kafka, Temporal) | an event must carry an ID; owner must be active |
-
-Huma validation also documents the API (it ends up in the OpenAPI spec). Core validation protects the domain from callers that skip HTTP, such as Kafka.
-
-### 2.6 How errors flow
-
-```
-driver error (pgx.ErrNoRows)
-   └─▶ outbound adapter wraps it      apperrors.ErrNotFound.New("example %s not found")
-        └─▶ module returns it unchanged (or creates its own, e.g. ErrForbidden)
-             ├─▶ router:   apperrors.HTTPStatus(err) → 404, PublicMessage(err) → body
-             ├─▶ activity: ErrNotFound/ErrForbidden/... → NonRetryableApplicationError
-             └─▶ consumer: ErrInvalidInput → poison, skip;  anything else → retry
-```
-
-- Only adapters know driver errors. Only the core and adapters know `errorx` types.
-- 5xx messages are **never** sent to clients. They are logged with the trace ID instead.
-
-### 2.7 DTO vs model
-
-- **Model** (`internal/const/models`): the domain's view, used everywhere inside.
-- **DTO** (`internal/const/dto`): the API contract, versioned with the API. It is converted at the router boundary (`ToModel`, `ExampleFromModel`).
-- **sqlc row** (`db.Example`): the table's view. It is converted at the repository boundary (`toModel`).
-
-Three shapes of the same thing might look redundant. They are what let the API, the domain and the schema evolve independently.
-
-### 2.8 Lifecycle of one request, file by file
-
-`POST /v1/examples {"name":"first","owner_id":"acc_1"}`
-
-| # | File | What happens |
+| Binary | Runs today | Planned |
 |---|---|---|
-| 1 | `initiator/handler.go` | gin middleware: recovery → **otelgin** span → zap request log → CORS |
-| 2 | `internal/const/dto/example.go` | Huma decodes into `CreateExampleRequest` and validates tags (`422` on failure) |
-| 3 | `internal/router/example.go` | `create()` → `in.Body.ToModel()` → `module.Create(ctx, model)` |
-| 4 | `internal/module/example.go` | Assigns ID and `pending` status, runs `validator` checks |
-| 5 | `internal/storage/repository/example.go` | sqlc `CreateExample` over the pgx pool (traced by otelpgx) |
-| 6 | `internal/storage/cache/example.go` | `SET example:<id>` in Valkey with TTL (best effort) |
-| 7 | `internal/storage/publisher/example.go` | Produces `example.created` keyed by ID. kotel injects `traceparent` into headers |
-| 8 | `internal/router/example.go` | Model → DTO → `201 Created` |
+| `cmd/api` (`InitiateAPI`) | `/healthz`, `/readyz`, `/docs`; optional pprof | read API |
+| `cmd/worker` (`InitiateWorker`) | the audit consumer (`initiator.BuildWorker`: Postgres + a consumer-group client on every `kafka.topics.<domain>`, group `audit.universal`); optional pprof | WORM segment writer |
 
-### 2.9 Lifecycle of one event → workflow
-
-| # | File | What happens |
-|---|---|---|
-| 1 | `internal/handler/event/consumer.go` | Poll loop receives the record and continues the producer's trace |
-| 2 | `internal/handler/event/example.go` | Decodes JSON (`ErrInvalidInput` = poison) → `module.HandleCreated` |
-| 3 | `internal/module/example.go` | Validates the event → `WorkflowStarter.StartProcessExample` |
-| 4 | `internal/handler/workflow/starter.go` | `ExecuteWorkflow` with ID `process-example-<id>`. A redelivered event is a no-op |
-| 5 | `internal/handler/workflow/example.go` | `ProcessExampleWorkflow` → activity `VerifyOwner` |
-| 6 | `internal/module/example.go` → `internal/storage/account` → `pkg/account` | Loads the example, calls account `GetAccount` over gRPC. Inactive owner → `ErrForbidden` (non-retryable) |
-| 7 | `internal/handler/workflow/example.go` | Activity `MarkProcessed` |
-| 8 | `internal/module/example.go` | Postgres status → `processed`, audit entry → Mongo, cache invalidated |
-| 9 | `consumer.go` | Offsets committed after the batch (at-least-once) |
-
-### 2.10 Two processes, one codebase
-
-| Binary | Runs | Connects to |
-|---|---|---|
-| `cmd/api` | HTTP API | Postgres, Valkey, Kafka (producer) |
-| `cmd/worker` | Temporal worker + Kafka consumer | Postgres, Valkey, Mongo, Temporal, account gRPC, Kafka (consumer) |
-
-`initiator/platform.go` uses a `needs` struct so each process only connects to what it uses. Both binaries share the same modules and adapters.
-
-### 2.11 Known trade-offs (read before production)
-
-- **Dual write**: `Create` writes to Postgres and then publishes to Kafka. If the publish fails, the row exists but no event is sent (this is logged). If you need a guarantee, use a **transactional outbox**: write the event to an `outbox` table in the same transaction and relay it.
-- **Consumer retries** are in-process (3 attempts with backoff), then the record is dropped and logged. Add a dead-letter topic at the marked extension point in `consumer.go`.
-- pprof binds to `127.0.0.1` only. Inside containers, use `kubectl port-forward` / `docker exec`, or change the bind address deliberately.
+`initiator/platform.go` has optional clients for Postgres, Valkey, the Kafka producer and Temporal, selected per process by a `needs` struct. Today both `apiNeeds` and `workerNeeds` are Postgres only.
 
 ---
 
@@ -231,405 +128,248 @@ Three shapes of the same thing might look redundant. They are what let the API, 
 ```
 .
 ├── cmd/
-│   ├── api/main.go                 # HTTP API entry (also: -openapi to print the spec)
-│   └── worker/main.go              # Temporal worker + Kafka consumer entry
-├── config/
-│   ├── config.go                   # typed Config + koanf loader (file + APP_* env)
-│   └── config.yaml                 # local defaults (match compose.dev.yml)
+│   ├── api/main.go                 # API entry (-openapi prints the spec)
+│   └── worker/main.go              # worker entry
+├── config/                         # config.go (koanf) + config.yaml (local defaults)
 ├── initiator/                      # COMPOSITION ROOT
 │   ├── config.go                   # config + zap logger
-│   ├── platform.go                 # infra clients, OpenTelemetry, ordered shutdown
-│   ├── module.go                   # adapters → ports → modules
-│   ├── handler.go                  # gin + middleware + Huma API + route registry
-│   └── initiator.go                # InitiateAPI / InitiateWorker / BuildAPI, graceful shutdown, pprof
+│   ├── platform.go                 # optional platform clients (needs), OpenTelemetry, ordered close
+│   ├── module.go                   # Modules{Audit}
+│   ├── handler.go                  # gin + middleware + Huma, health checks, registerRoutes (empty)
+│   └── initiator.go                # InitiateAPI / InitiateWorker / BuildAPI / BuildWorker, shutdown, pprof
 ├── internal/
 │   ├── const/
-│   │   ├── models/                 # DOMAIN entities and events
-│   │   ├── errors/                 # DOMAIN error taxonomy (errorx) + HTTP mapping
-│   │   ├── dto/                    # HTTP request/response shapes (Huma tags)
-│   │   ├── migrations/             # golang-migrate SQL (embedded) = sqlc schema
-│   │   ├── queries/                # sqlc queries
-│   │   ├── database/{postgres,mongo}/  # platform clients
+│   │   ├── models/audit.go         # DOMAIN: AuditRecord, Actor, Page
+│   │   ├── errors/                 # DOMAIN: error taxonomy (errorx) + HTTP mapping
+│   │   ├── dto/health.go           # HTTP shapes
+│   │   ├── events/                 # event catalog: one file per domain + events.go
+│   │   ├── migrations/             # 000001_audit.{up,down}.sql (embedded, also the sqlc schema)
+│   │   ├── queries/audit.sql       # InsertAuditRecords, GetAuditRecord
+│   │   ├── database/postgres/      # platform client
 │   │   ├── cache/valkey/           # platform client
 │   │   ├── messaging/kafka/        # platform client (franz-go + kotel)
-│   │   └── workflow/temporal/      # platform client (Temporal + OTel)
-│   ├── module/                     # CORE: ports + use cases
+│   │   └── workflow/temporal/      # platform client
+│   ├── module/                     # CORE: audit.go, tests, benchmark
 │   │   └── mocks/                  # generated by mockery (do not edit)
-│   ├── router/                     # INBOUND: HTTP (Huma operations, errors, health, middleware)
-│   ├── handler/
-│   │   ├── event/                  # INBOUND: Kafka consumer loop + per-topic handlers
-│   │   └── workflow/               # INBOUND: Temporal workflows/activities (+ starter adapter)
-│   └── storage/                    # OUTBOUND adapters
-│       ├── repository/             # Postgres (sqlc) + Mongo audit
-│       │   └── db/                 # generated by sqlc (do not edit)
-│       ├── cache/                  # Valkey
-│       ├── publisher/              # Kafka producer
-│       └── account/                # pkg/account SDK → AccountClient port
-├── pkg/account/                    # reusable gRPC SDK (+ proto/, gen/)
+│   ├── router/                     # INBOUND HTTP: health.go, errors.go, middleware.go
+│   ├── handler/event/              # INBOUND Kafka: audit.go (AuditConsumer), envelope.go (decoder), consumer.go (generic)
+│   └── storage/repository/         # OUTBOUND: audit.go (+ testcontainers test and benchmark)
+│       └── db/                     # generated by sqlc (do not edit)
+├── pkg/dpsapi/gen/                 # generated from dps-contracts v0.1.0 (do not edit)
 ├── tests/
-│   ├── e2e/                        # godog features + steps (testcontainers)
-│   ├── load/example.js             # k6 load test
-│   └── stubs/account/              # local stub of the external account gRPC service
-├── bench/                          # benchmark results (baseline.txt is committed)
+│   ├── e2e/                        # godog + testcontainers Postgres (features/health.feature)
+│   ├── integration/                # audit consumer vs testcontainers Redpanda + Postgres
+│   └── storagebench/               # storage design benchmark (YSQL, S3 Object Lock, OpenSearch)
+├── bench/storage/                  # storage benchmark results (RESULTS.md)
+├── docs/                           # architecture.md, openapi.yaml (generated)
 ├── .claude/skills/                 # Claude Code skills for this codebase
 ├── compose.dev.yml                 # local infrastructure
-├── compose.yml                     # full stack (includes compose.dev.yml)
-├── Dockerfile                      # multi-stage: api / worker / account-stub on scratch
-├── Makefile                        # every workflow (make help)
-├── sqlc.yaml · buf.yaml · buf.gen.yaml · .mockery.yaml · .golangci.yml
-└── CLAUDE.md
+├── compose.yml                     # full stack: migrate job, api, worker
+├── Dockerfile                      # multi-stage: api / worker on scratch
+├── Makefile                        # make help
+└── sqlc.yaml · buf.gen.yaml · .mockery.yaml · .golangci.yml · CLAUDE.md
 ```
 
 ---
 
-## 4. Getting started
+## 4. Running locally
 
-### Prerequisites
+Prerequisites: Go **1.27+** and Docker with Compose v2.20+. Every other tool is pinned in `go.mod` (`go tool`) or runs in Docker (sqlc).
 
-- Go **1.27+**
-- Docker with Compose v2.20+ (for `include:`)
-- That's it: every other tool is pinned in `go.mod` or runs in Docker.
-
-### Option A: run the service on your host (fast feedback)
+### On the host
 
 ```bash
-make tools            # one-time: download modules and build pinned tools
-make dev-up           # postgres, mongo, valkey, redpanda, temporal, jaeger, account stub
-make run-api          # terminal 1 (migrations auto-apply in development)
-make run-worker       # terminal 2
+make tools        # one-time: download modules and build pinned tools
+make dev-up       # postgres (db audit), valkey, redpanda, redpanda-console, temporal, jaeger
+make run-api      # migrations auto-apply (postgres.auto_migrate: true)
+make run-worker   # second terminal
 ```
 
-### Option B: run everything in Docker
+### Everything in Docker
 
 ```bash
-make up               # builds images, runs migrations, starts api + worker
+make up           # builds images, runs the migrate job, starts api + worker
 make logs
+make down
 ```
 
-### Try it
+### Check it
 
 ```bash
-# create
-curl -s -X POST localhost:8080/v1/examples \
-  -H 'content-type: application/json' \
-  -d '{"name":"first example","owner_id":"acc_1"}' | jq
-# → status "pending"
-
-# a moment later the worker has processed it
-curl -s localhost:8080/v1/examples/<id> | jq .status    # → "processed"
-
-# list, health
-curl -s 'localhost:8080/v1/examples?limit=10' | jq
-curl -s localhost:8080/readyz | jq
+curl -s localhost:8080/healthz | jq
+curl -s localhost:8080/readyz | jq      # includes the postgres check
 ```
-
-The account stub treats `owner_id` values specially: `inactive_*` fails the workflow as forbidden (non-retryable), and `missing_*` fails it as not found.
-
-### UIs
 
 | What | URL |
 |---|---|
-| API docs (Huma, interactive) | http://localhost:8080/docs |
-| OpenAPI spec | http://localhost:8080/openapi.json (or `.yaml`) |
-| Redpanda Console (topics, messages) | http://localhost:8081 |
-| Temporal UI (workflows) | http://localhost:8233 |
-| Jaeger (traces; set `APP_TELEMETRY__ENABLED=true` when running on host) | http://localhost:16686 |
+| API docs (Huma) | http://localhost:8080/docs |
+| Redpanda Console | http://localhost:8081 |
+| Temporal UI | http://localhost:8233 |
+| Jaeger (set `APP_TELEMETRY__ENABLED=true` on the host) | http://localhost:16686 |
+
+**Known issue:** `make migrate-up` fails because the cached `go tool migrate` binary has no `pgx5` driver. Use `auto_migrate` (above) or the compose `migrate` job (`migrate/migrate` image), which works.
 
 ---
 
 ## 5. Configuration
 
-The loader is `config/config.go`. Sources are applied in order, and later sources win:
+The loader is `config/config.go` (koanf). Later sources win:
 
-1. YAML file at `$CONFIG_PATH` (default `config/config.yaml`; in Docker `/config/config.yaml`)
-2. Environment variables: prefix `APP_`, with `__` separating levels. Comma-separated values become lists.
+1. YAML at `$CONFIG_PATH` (default `config/config.yaml`)
+2. Environment variables: prefix `APP_`, `__` between levels, comma-separated values become lists.
 
 ```bash
 APP_POSTGRES__URL=postgres://...      # postgres.url
-APP_SERVER__PPROF_PORT=6060           # server.pprof_port
 APP_KAFKA__BROKERS=b1:9092,b2:9092    # kafka.brokers (list)
+APP_SERVER__PPROF_PORT=6060           # server.pprof_port
 ```
 
 | Key | Default | Description |
 |---|---|---|
-| `app.name` / `app.version` | example-service / 0.1.0 | Used in logs, traces, OpenAPI |
-| `app.environment` | development | `development` = console logs + gin debug; anything else = JSON logs + release mode |
+| `app.name` / `app.version` / `app.environment` | dps-audit-service / 0.1.0 / development | `development` = console logs + gin debug; anything else = JSON logs |
 | `server.host` / `server.port` | 0.0.0.0 / 8080 | HTTP listener |
-| `server.read_timeout` / `write_timeout` | 10s | HTTP timeouts |
-| `server.shutdown_timeout` | 15s | Graceful shutdown budget |
-| `server.cors_origins` | `["*"]` | Allowed CORS origins |
+| `server.read_timeout` / `write_timeout` / `shutdown_timeout` | 10s / 10s / 15s | |
+| `server.cors_origins` | `["*"]` | |
 | `server.pprof_port` | 0 (off) | Admin pprof listener on 127.0.0.1 |
-| `postgres.url` | local | pgx connection string |
+| `postgres.url` | local, db `audit` | pgx connection string (YSQL in production) |
 | `postgres.max_conns` | 10 | Pool size |
-| `postgres.auto_migrate` | true | Apply embedded migrations on startup (compose disables it; the `migrate` job owns the schema) |
-| `mongo.uri` / `mongo.database` | local / example | |
-| `valkey.url` / `valkey.ttl` | redis://localhost:6379/0 / 5m | Cache TTL |
+| `postgres.auto_migrate` | true | Apply embedded migrations on start (compose sets false; the `migrate` job owns the schema) |
+| `valkey.url` / `valkey.ttl` | redis://localhost:6379/0 / 5m | Not used by any process yet |
 | `kafka.brokers` | localhost:19092 | |
-| `kafka.consumer_group` | example-service | |
-| `kafka.topics.example_created` | example.created | |
-| `temporal.host_port` / `namespace` / `task_queue` | localhost:7233 / default / example-service | |
-| `account.address` / `account.timeout` | localhost:9090 / 3s | Account gRPC service |
-| `telemetry.enabled` | false | Export traces via OTLP |
-| `telemetry.otlp_endpoint` | localhost:4317 | OTLP gRPC endpoint |
-| `telemetry.sample_ratio` | 1.0 | Parent-based ratio sampler |
+| `kafka.consumer_group` | audit.universal | |
+| `kafka.topics.<domain>` | `<domain>.events` | One entry per domain (17); the worker subscribes to every non-empty one (`Topics.List()`) |
+| `audit.batch_size` | 500 | Records per `Audit.Record` call |
+| `audit.max_poll_records` | 5000 | Records per poll, across partitions; offsets are committed once per poll |
+| `audit.retry_max_backoff` | 30s | Cap of the retry backoff (starts at 200 ms) for a failed batch |
+| `temporal.host_port` / `namespace` / `task_queue` | localhost:7233 / default / audit | Not used by any process yet |
+| `telemetry.enabled` / `otlp_endpoint` / `sample_ratio` | false / localhost:4317 / 1.0 | OTLP trace export, parent-based ratio sampler |
 
-To add config, add a field with a `koanf` tag to `config.Config`, a default to `config.yaml`, and a row to this table.
-
----
-
-## 6. Recipes
-
-Each recipe has a matching Claude Code skill in `.claude/skills/` (see [§12](#12-claude-code-skills)).
-
-### 6.1 Add a new domain (entity)
-
-Example: `Order`. Follow the `Example` files as the reference.
-
-1. **Schema**: `make migrate-new NAME=create_orders`, then fill the up and down files.
-2. **Queries**: add `internal/const/queries/order.sql` (`-- name: CreateOrder :one`, ...), then `make sqlc`.
-3. **Domain**: `internal/const/models/order.go` with the entity, its events and `validate` tags.
-4. **Errors**: reuse the existing types. Add a new errorx type only for a genuinely new category.
-5. **Core**: `internal/module/order.go` with:
-   - the inbound port `Order` interface;
-   - the outbound ports `OrderRepository` and the rest;
-   - an `OrderDeps` struct and `NewOrder`.
-
-   Then run `make mocks`.
-6. **Outbound adapters**: `internal/storage/repository/order.go` (and cache/publisher if needed), each with `var _ module.X = (*impl)(nil)` and errors mapped to `apperrors`.
-7. **DTOs**: `internal/const/dto/order.go`, with Huma tags and `ToModel`/`FromModel`.
-8. **Inbound adapter**: `internal/router/order.go` with `RegisterOrder(api, m, logger)`.
-9. **Wire it** in `initiator/`:
-   - `module.go`: add a field to `Modules` and build the adapters and module.
-   - `handler.go`: add `router.RegisterOrder(...)` to `registerRoutes`.
-10. **Tests**: `internal/module/order_test.go` (mocks), a router test, and a `tests/e2e/features/order_rest.feature` with steps.
-11. Run `make generate lint test test-e2e`.
-
-### 6.2 Add a migration and a query
-
-```bash
-make migrate-new NAME=add_priority_to_examples
-# edit internal/const/migrations/00000N_add_priority_to_examples.{up,down}.sql
-# add/edit queries in internal/const/queries/*.sql
-make sqlc            # regenerate internal/storage/repository/db
-make migrate-up      # apply to the local DB (or just restart run-api)
-```
-
-Then update the repository adapter's mapping (`toModel`) and the domain model. Migrations are embedded, so new binaries carry them automatically.
-
-### 6.3 Add an endpoint
-
-1. Add the input/output structs to `dto/` (path/query/body plus validation tags).
-2. Add a method to the inbound port in `module`, implement it, and run `make mocks`.
-3. `huma.Register(api, huma.Operation{OperationID, Method, Path, Summary, Tags}, h.handler)` in the router file.
-4. Return errors through `h.errs.toHuma(ctx, err)`. Never build status codes by hand.
-5. Add a router test, a Gherkin scenario, and run `make openapi` to refresh `docs/openapi.yaml`.
-
-### 6.4 Add a Kafka topic and consumer
-
-1. Add the topic name to `config.Topics` and `config.yaml`.
-2. Define the event struct in `models` (with `validate` tags).
-3. **Publish**: add a method to the `EventPublisher` port, or create a new port, then implement it in `internal/storage/publisher/`. Key records by entity ID to keep ordering.
-4. **Consume**: add `internal/handler/event/<name>.go` returning a `HandlerFunc` that decodes and calls the module. Return `ErrInvalidInput` for undecodable records.
-5. Register it in `InitiateWorker`'s `handlers` map (`initiator/initiator.go`).
-6. Handlers must be **idempotent**, because delivery is at least once.
-
-### 6.5 Add a Temporal workflow
-
-1. Write the workflow function in `internal/handler/workflow/<name>.go`. It must be **deterministic**: no I/O, `time.Now`, randomness or goroutines. Use `workflow.*` APIs instead.
-2. Make the activities thin methods on `Activities` that call the module and wrap errors with `toTemporalErr`.
-3. Register them in `Register()`.
-4. To start the workflow from the core, add a method to a `WorkflowStarter`-style port and implement it in `starter.go` with a **deterministic workflow ID** for idempotency.
-5. Test with `testsuite.WorkflowTestSuite` and module mocks (see `example_test.go`).
-
-### 6.6 Add a gRPC client
-
-1. Put the proto in `pkg/<service>/proto/<service>/v1/*.proto` and add the path to `buf.yaml` modules and `buf.gen.yaml` outputs.
-2. Run `make proto`.
-3. Add `pkg/<service>/grpc.go` (Dial with `otelgrpc`) and `client.go` (an SDK returning its own types). It must **not** import `internal/`.
-4. Add an outbound port in `module`, and an adapter in `internal/storage/<service>/` that converts SDK types to models and gRPC codes to `apperrors`.
-5. Add config (`address`, `timeout`), connect it in `platform.go`, and wire it in `module.go`.
+To add config: a `koanf`-tagged field in `config.Config`, a default in `config.yaml`, and a row here.
 
 ---
 
-## 7. Testing strategy
+## 6. Testing and benchmarks
 
-| Level | Where | Runs with | Docker? | Speed |
-|---|---|---|---|---|
-| Core unit | `internal/module/*_test.go` | mockery mocks for every port | no | ms |
-| HTTP adapter | `internal/router/*_test.go` | real gin + Huma, mocked module, `httptest` | no | ms |
-| Workflow | `internal/handler/workflow/*_test.go` | Temporal `testsuite` (time-skipping) + mocks | no | ms |
-| Adapter integration | `internal/storage/**/*_test.go` | testcontainers (mongo, postgres, valkey) | yes | seconds |
-| End-to-end | `tests/e2e` | godog features. The real API (`initiator.BuildAPI`) runs in-process against testcontainers postgres, valkey and redpanda | yes | ~10s, plus image pulls on the first run |
+| Level | Where | Runs with | Docker? |
+|---|---|---|---|
+| Core unit | `internal/module/audit_test.go` | mockery mocks of `AuditLog` | no |
+| Event catalog | `internal/const/events/events_test.go` | plain Go | no |
+| Storage integration | `internal/storage/repository/audit_test.go` (`TestAuditRepository`) | testcontainers Postgres; skipped with `-short` | yes |
+| Envelope decoder | `internal/handler/event/envelope_test.go` | plain Go: valid records (plain and Schema Registry framed), enum names, undecodable values kept with `metadata_valid=false` | no |
+| Consumer integration | `tests/integration/consumer_test.go` (`TestAuditConsumer`) | the real worker (`initiator.BuildWorker`) in-process against testcontainers Redpanda v25.2.1 + Postgres 17; about 20 s; skipped with `-short` | yes |
+| End-to-end | `tests/e2e` (`features/health.feature`) | godog; the real API (`initiator.BuildAPI`) in-process against testcontainers Postgres. Covers liveness, readiness (postgres ok) and that `audit_records` exists | yes |
 
 ```bash
 make test        # unit only: go test -short -race ./...
-make test-e2e    # gherkin features, verbose
-make test-all    # everything
+make test-e2e    # gherkin features
+make test-integration  # audit consumer against Redpanda + Postgres
+make test-all    # unit, integration and e2e
 make cover
 ```
 
-Conventions:
+`make test-integration` proves, on 3 topics x 3 partitions: 290 unique events + 10 re-published duplicates + 1 garbage record give 291 rows; the garbage row is kept (`metadata_valid=false`, type from the header) and every metadata column round-trips; group lag reaches 0; a restart with 50 more events and 5 duplicates gives 341 rows; during a store outage (table renamed) rows stay at 341 and lag stays at 20 (nothing committed), and after recovery there are 361 rows and lag 0.
 
-- Tests that need Docker check `testing.Short()` and skip, so `make test` never needs Docker.
-- Mock expectations use the typed `EXPECT()` API. Mocks fail the test on unexpected calls, which is how the router test proves that invalid input never reaches the core.
-- E2E steps keep per-scenario state in a fresh `steps` struct. Add new steps in `tests/e2e/steps_test.go`.
+### Micro-benchmarks
 
----
-
-## 8. Benchmarking and performance
-
-### 8.1 Micro-benchmarks for each layer
-
-Benchmarks use Go 1.24's `b.Loop()` (setup is excluded automatically) and `b.ReportAllocs()`.
-
-| Benchmark | Measures | Docker |
+| Benchmark | Measures | Docker? |
 |---|---|---|
-| `internal/module/example_bench_test.go` | Pure business logic with in-memory fakes (not mocks, which add reflection overhead): API use cases (create, get, list) and worker use cases (handle created, verify owner, mark processed) | no |
-| `internal/router/example_bench_test.go` | HTTP adapter cost: routing, Huma decode/validate, DTO mapping, JSON encode (create, get, list at 20 and 100 items) | no |
-| `internal/handler/event/example_bench_test.go` | Kafka adapter cost: JSON decode and dispatch of `example.created` | no |
-| `internal/handler/workflow/example_bench_test.go` | Temporal activity adapter cost: ID parsing and error-to-retry mapping | no |
-| `internal/storage/cache/example_bench_test.go` | Valkey round-trip and JSON codec | yes |
-| `internal/storage/repository/example_bench_test.go` | Postgres create/get/list through sqlc + pgx | yes |
+| `internal/module/audit_bench_test.go` (`BenchmarkRecord`) | `Audit.Record` with a hand-written fake (`nopLog`) | no |
+| `internal/handler/event/envelope_bench_test.go` (`BenchmarkDecodeRecord`) | per-record decode: Schema Registry framing + `EventMetadata` unmarshal. About 1 µs and 13 allocs per record | no |
+| `internal/storage/repository/audit_test.go` (`BenchmarkAuditRepository`) | batch `Append` through sqlc + pgx. A 100-record batch takes about 2.4 ms locally | yes |
+
+They use `b.Loop()`. A new or changed use case, endpoint, Kafka handler or storage adapter ships with a benchmark in the same change (`.claude/skills/add-benchmark`).
 
 ```bash
-make bench                                   # all, 6 runs each → bench/current.txt
-make bench BENCH_PKGS=./internal/router      # one package
-go test -short -run='^$' -bench=. ./internal/...   # quick, skips docker benchmarks
+make bench                     # → bench/current.txt (BENCH_PKGS, BENCH_COUNT)
+make bench-baseline            # record bench/baseline.txt
+make bench-compare             # benchstat vs the baseline
+make bench-profile PKG=./internal/module
 ```
 
-New or changed use cases, endpoints, handlers, activities and adapters ship with a benchmark in the same change. The rules are in `.claude/skills/add-benchmark` ("When a benchmark is required").
+### Storage design benchmark
 
-### 8.2 Detecting regressions with benchstat
+`tests/storagebench` compares YSQL write designs together with an S3 Object Lock segment writer and an OpenSearch sink. It only runs with `STORAGEBENCH=1`:
 
 ```bash
-make bench-baseline     # on main: records bench/baseline.txt (commit it)
-# ...make changes...
-make bench-compare      # fresh run vs baseline, with statistical significance
+make bench-storage SB_PROFILE=quick   # or full
 ```
 
-```
-                    │ baseline.txt │            current.txt             │
-                    │    sec/op    │   sec/op     vs base               │
-CreateExample-8        15.31µ ± 2%   12.10µ ± 1%  -20.97% (p=0.002 n=6)
-```
-
-Trust a delta only when `p < 0.05`. `~` means there is no significant difference. Use `BENCH_COUNT` ≥ 6.
-
-### 8.3 Profiling
-
-```bash
-make bench-profile PKG=./internal/router   # CPU profile in the pprof web UI; bench/mem.out has allocations
-go tool pprof -http=:0 bench/pkg.test bench/mem.out
-```
-
-For a **running** service, set `APP_SERVER__PPROF_PORT=6060` and then:
-
-```bash
-go tool pprof -http=:0 http://127.0.0.1:6060/debug/pprof/profile?seconds=30   # CPU
-go tool pprof -http=:0 http://127.0.0.1:6060/debug/pprof/heap                 # heap
-curl -o trace.out http://127.0.0.1:6060/debug/pprof/trace?seconds=5 && go tool trace trace.out
-```
-
-### 8.4 Load testing with k6
-
-`tests/load/example.js` ramps to 20 virtual users. Each one creates an example and reads it twice (the second read is a cache hit).
-
-```bash
-make up            # or dev-up + run-api
-make load-test     # BASE_URL=http://host.docker.internal:8080 by default
-```
-
-The thresholds fail the run (non-zero exit, CI-friendly) when:
-
-- `http_req_failed` ≥ 1%
-- create p95 ≥ 250ms
-- get p95 ≥ 100ms
-
-Tune them to your SLOs. Look at `http_req_duration{name:...}` for each endpoint, and correlate slow requests in Jaeger.
+Results are in `bench/storage/RESULTS.md`.
 
 ---
 
-## 9. Observability
+## 7. Design decisions
 
-- **Logs**: zap. Console output in development, JSON elsewhere. Every request logs method, path, status, latency and `trace_id`. 5xx errors log the full internal error with `trace_id`, and the client sees only `internal server error`.
-- **Traces**: OpenTelemetry with W3C `traceparent` propagation (always on, even when export is off):
-  - HTTP → `otelgin`
-  - SQL → `otelpgx`
-  - Valkey → `redisotel`
-  - Kafka produce/consume → `kotel`, with the context carried in record headers
-  - Temporal → the tracing interceptor on client and worker
-  - gRPC → `otelgrpc`
+| Decision | Choice | Why / consequence |
+|---|---|---|
+| Store | YugabyteDB YSQL in production | Plain Postgres-compatible SQL, so dev and tests use Postgres 17 |
+| Table layout | One table, `audit_records` | No per-domain tables; the event type is a column |
+| Dedupe | `event_id` primary key, `ON CONFLICT (event_id) DO NOTHING` | Redelivery and re-publish are no-ops; `Append` returns only the new rows |
+| Batch write | One statement per batch (`unnest` arrays) | See `InsertAuditRecords` in `internal/const/queries/audit.sql` |
+| Integrity | Append-only trigger; **no hash chain and no application-level encryption** | Encryption at rest in the database and in Ceph. Tamper evidence comes from the WORM copy in Ceph Object Lock, Compliance mode (planned) |
+| Search | Aggregate and correlation lookups in the database (indexes on `(aggregate_id, occurred_at DESC)` and `(correlation_id, occurred_at DESC)`) | Actor, event-type and ad-hoc search go to OpenSearch, fed by group `audit.search-indexer` in a separate process (planned) |
+| Consumer (implemented) | `internal/handler/event/audit.go` in `cmd/worker`: `PollRecords`, partitions written concurrently (in order within one), batches of `audit.batch_size` | A failed batch is retried with backoff until it succeeds or the worker stops; nothing is dropped (undecodable = `metadata_valid=false`). Offsets are committed only after every partition of the poll is stored, so a partition stuck retrying also holds back the others in that poll |
+| Contracts | Decode only the envelope (`EventMetadata`) from dps-contracts | The payload is stored as received, so audit needs no generated code per event type |
 
-  One `POST` therefore shows in Jaeger as a single trace that spans the API, Kafka, the worker, the Temporal activities and the account gRPC call.
-- **Health**: `/healthz` checks liveness (the process is up). `/readyz` checks readiness: it pings every dependency of the process in parallel and returns `503` with details if any fails.
-- To enable export, set `APP_TELEMETRY__ENABLED=true` (already set in `compose.yml`) and `APP_TELEMETRY__OTLP_ENDPOINT`.
-
----
-
-## 10. Using this as a template
-
-```bash
-git clone <this repo> my-service && cd my-service
-rm -rf .git && git init
-make rename MODULE_NEW=github.com/my-org/my-service
-make tools generate test
-```
-
-Then:
-
-1. Update `app.name` in `config/config.yaml`, the compose project `name:`, and `.golangci.yml` (the rename handles the module path in it).
-2. Build your first domain using [§6.1](#61-add-a-new-domain-entity) with the example as a reference.
-3. Delete the example slice once you no longer need it:
-   - `models/example.go`, `dto/example.go`, `module/example*.go`
-   - `router/example*.go`, `handler/event/example.go`, `handler/workflow/example*.go`
-   - `storage/*/example*.go`, `queries/initial.sql`, `migrations/000001_*`
-   - `tests/e2e/features/example_rest.feature`, `tests/load/example.js`
-
-   Then remove their wiring in `initiator/`.
-4. Replace `pkg/account` and `tests/stubs/account` with your real dependencies, or remove them.
-5. `make generate lint test`.
+The storage research and benchmarks behind these choices are in the claude.ai doc "DPS Audit Storage Research".
 
 ---
 
-## 11. Make targets
+## 8. Roadmap
+
+In order:
+
+1. ~~Universal Kafka consumer~~ (done). Next the WORM segment writer to Ceph Object Lock (which will then gate offset commits too), then the OpenSearch indexer.
+2. Read API (`dps.audit.v1.AuditService`).
+3. Take dps-contracts v0.2.0 (adds `EventMetadata.channel`, the per-domain topic model and all 123 event schemas).
+4. Fix `make migrate-up`.
+
+Risks and their fixes are in [docs/architecture.md §4](docs/architecture.md#4-known-trade-offs-and-roadmap).
+
+---
+
+## 9. Extending the service
+
+Each recipe has a Claude Code skill in `.claude/skills/` (read `architecture-rules` first). The audit slice is the reference pattern.
+
+### Add a domain (entity)
+
+Follow `add-domain`, mirroring the audit files:
+
+1. Schema: `make migrate-new NAME=<name>`, then fill the up and down files (like `000001_audit`).
+2. Queries: `internal/const/queries/<name>.sql`, then `make sqlc`.
+3. Domain: `internal/const/models/<name>.go` with `validate` tags (like `audit.go`).
+4. Core: `internal/module/<name>.go` with the inbound port, outbound ports, a `<Name>Deps` struct and `New<Name>`, then `make mocks`.
+5. Outbound adapter: `internal/storage/repository/<name>.go` with `var _ module.X = ...` and driver errors mapped to `apperrors`.
+6. Inbound adapter: a router file (and DTOs) or a Kafka handler.
+7. Wire it in `initiator/module.go` (and `registerRoutes` in `initiator/handler.go` for HTTP).
+8. Tests and a `b.Loop` benchmark, then `make generate lint test test-e2e`.
+
+### Other recipes
+
+| Task | Skill | Notes |
+|---|---|---|
+| Change the schema or queries | `add-migration-query` | Never edit `internal/storage/repository/db`; run `make sqlc` |
+| Add an HTTP endpoint | `add-endpoint` | Register in `registerRoutes`; return errors through the router's `errorMapper`; `make openapi` |
+| Add a Kafka consumer | `add-kafka-consumer` | Handlers go in `internal/handler/event/` and must be idempotent. A never-drop consumer follows `AuditConsumer`; others may use the generic `consumer.go` (returns `ErrInvalidInput` to drop) |
+| Add a Temporal workflow | `add-temporal-workflow` | None exist yet; the platform client is ready |
+| Add a gRPC client | `add-grpc-client` | |
+| Add a benchmark | `add-benchmark` | |
+
+Run `make lint` after every change: depguard enforces the import rules.
+
+---
+
+## 10. Make targets
 
 Run `make help` for the live list.
 
-| Group | Target | Description |
-|---|---|---|
-| Setup | `tools` | Download modules and build pinned dev tools |
-| | `rename MODULE_NEW=...` | Rename the Go module across the repo |
-| Run | `run-api` / `run-worker` | Run on the host (needs `dev-up`) |
-| | `dev-up` / `dev-down` | Local infrastructure (`compose.dev.yml`) |
-| | `up` / `down` / `logs` | Full stack (`compose.yml`) |
-| Codegen | `generate` | `sqlc` + `proto` + `mocks` + `openapi` |
-| | `sqlc` | Queries → `internal/storage/repository/db` |
-| | `proto` | buf lint + generate gRPC code |
-| | `mocks` | mockery → `internal/module/mocks` |
-| | `openapi` | Spec → `docs/openapi.yaml` |
-| Database | `migrate-new NAME=` | New up/down migration pair |
-| | `migrate-up` / `migrate-down` / `migrate-force V=` | Run against `DB_URL` |
-| Quality | `fmt` / `vet` / `lint` | Formatting, vet, golangci-lint (with architecture rules) |
-| | `test` / `test-e2e` / `test-all` / `cover` | See [§7](#7-testing-strategy) |
-| Benchmarks | `bench` / `bench-baseline` / `bench-compare` | See [§8](#8-benchmarking-and-performance) |
-| | `bench-profile PKG=` / `load-test` | pprof and k6 |
-| Build | `build` / `docker-build` / `clean` | Binaries in `bin/`, images, cleanup |
-
----
-
-## 12. Claude Code skills
-
-`.claude/skills/` teaches Claude Code this codebase's conventions, so generated code follows the same architecture. Each skill is a step-by-step checklist that points at the example files as the canonical pattern.
-
-| Skill | Use it to |
+| Group | Targets |
 |---|---|
-| `architecture-rules` | Check layer responsibilities and import rules before editing any layer |
-| `add-domain` | Scaffold a new entity across every layer |
-| `add-migration-query` | Change the schema and queries with golang-migrate + sqlc |
-| `add-endpoint` | Add a Huma operation, with tests and a Gherkin scenario |
-| `add-kafka-consumer` | Add a topic, publisher, consumer handler and worker registration |
-| `add-temporal-workflow` | Add a workflow, activities, registration and a testsuite test |
-| `add-grpc-client` | Add a proto, SDK in `pkg/`, port, adapter and wiring |
-| `add-benchmark` | Write `b.Loop` benchmarks, compare with benchstat, profile, extend k6 |
-
-`CLAUDE.md` at the root gives Claude the short version and links here.
+| Setup | `tools`, `rename MODULE_NEW=...` |
+| Run | `run-api`, `run-worker`, `dev-up`, `dev-down`, `up`, `down`, `logs` |
+| Codegen | `generate` (= `sqlc` + `proto` + `mocks` + `openapi`) |
+| Database | `migrate-new NAME=`, `migrate-up`, `migrate-down`, `migrate-force V=` (against `DB_URL`; see the known issue in §4) |
+| Quality | `fmt`, `vet`, `lint`, `test`, `test-e2e`, `test-integration`, `test-all`, `cover` |
+| Benchmarks | `bench`, `bench-baseline`, `bench-compare`, `bench-profile PKG=`, `bench-storage SB_PROFILE=quick\|full` |
+| Build | `build`, `docker-build`, `clean` |

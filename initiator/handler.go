@@ -42,14 +42,13 @@ func newHTTPHandler(cfg *config.Config, p *Platform, mods Modules, logger *zap.L
 
 func newHumaAPI(engine *gin.Engine, cfg *config.Config) huma.API {
 	hc := huma.DefaultConfig(cfg.App.Name, cfg.App.Version)
-	hc.Info.Description = "Example service built from the hexagonal Go template."
+	hc.Info.Description = "DPS audit service: the append-only trail of every DPS domain event."
 	return humagin.New(engine, hc)
 }
 
 // registerRoutes is the single list of business routes. Add new modules here.
-func registerRoutes(api huma.API, mods Modules, logger *zap.Logger) {
-	router.RegisterExample(api, mods.Example, logger.Named("router"))
-}
+// The audit read API (dps.audit.v1.AuditService) is not exposed yet.
+func registerRoutes(_ huma.API, _ Modules, _ *zap.Logger) {}
 
 func healthChecks(p *Platform) map[string]router.Check {
 	checks := map[string]router.Check{}

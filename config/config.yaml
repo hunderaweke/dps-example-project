@@ -1,7 +1,7 @@
 # Defaults for local development (matches compose.dev.yml).
 # Override any key with an env var: APP_<SECTION>__<KEY>, e.g. APP_POSTGRES__URL.
 app:
-  name: example-service
+  name: dps-audit-service
   environment: development
   version: 0.1.0
 
@@ -15,13 +15,9 @@ server:
   pprof_port: 0 # set e.g. 6060 to expose net/http/pprof
 
 postgres:
-  url: postgres://postgres:postgres@localhost:5432/example?sslmode=disable
+  url: postgres://postgres:postgres@localhost:5432/audit?sslmode=disable
   max_conns: 10
   auto_migrate: true
-
-mongo:
-  uri: mongodb://localhost:27017
-  database: example
 
 valkey:
   url: redis://localhost:6379/0
@@ -29,18 +25,35 @@ valkey:
 
 kafka:
   brokers: ["localhost:19092"]
-  consumer_group: example-service
+  consumer_group: audit.universal
   topics:
-    example_created: example.created
+    auth: auth.events
+    onboarding: onboarding.events
+    account: account.events
+    payment: payment.events
+    tpi: tpi.events
+    ledger: ledger.events
+    fee: fee.events
+    airtime: airtime.events
+    utility: utility.events
+    airline: airline.events
+    notification: notification.events
+    adminops: adminops.events
+    fuel: fuel.events
+    lending: lending.events
+    assistant: assistant.events
+    ticketing: ticketing.events
+    dwh: dwh.events
+
+audit:
+  batch_size: 500
+  max_poll_records: 5000
+  retry_max_backoff: 30s
 
 temporal:
   host_port: localhost:7233
   namespace: default
-  task_queue: example-service
-
-account:
-  address: localhost:9090
-  timeout: 3s
+  task_queue: audit
 
 telemetry:
   enabled: false

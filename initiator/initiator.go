@@ -4,24 +4,21 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"maps"
 	"net"
 	"net/http"
 	"net/http/pprof"
 	"os/signal"
-	"slices"
 	"strconv"
 	"syscall"
 	"time"
 
-	"go.temporal.io/sdk/worker"
+	"github.com/twmb/franz-go/pkg/kgo"
 	"go.uber.org/zap"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/hunderaweke/dps-audit-service/config"
 	"github.com/hunderaweke/dps-audit-service/internal/const/messaging/kafka"
 	"github.com/hunderaweke/dps-audit-service/internal/handler/event"
-	"github.com/hunderaweke/dps-audit-service/internal/handler/workflow"
 )
 
 // API bundles everything needed to serve HTTP. Exported so e2e tests can run
@@ -88,8 +85,53 @@ func InitiateAPI() error {
 	return errors.Join(errs...)
 }
 
-// InitiateWorker runs the Temporal worker and the Kafka consumer until
-// SIGINT/SIGTERM.
+// Worker bundles the audit consumer and the clients it needs. Exported so
+// integration tests can run the real worker in-process against testcontainers.
+type Worker struct {
+	Platform *Platform
+	Modules  Modules
+	client   *kgo.Client
+	consumer *event.AuditConsumer
+}
+
+// BuildWorker connects the platform and a consumer-group client for every
+// configured domain topic.
+func BuildWorker(ctx context.Context, cfg *config.Config, logger *zap.Logger) (_ *Worker, err error) {
+	p, err := newPlatform(ctx, cfg, logger, workerNeeds)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err != nil {
+			_ = p.Close(context.Background())
+		}
+	}()
+	mods := newModules(cfg, p, logger)
+
+	client, err := kafka.NewConsumer(ctx, cfg.Kafka, cfg.Kafka.Topics.List(), kgo.BlockRebalanceOnPoll())
+	if err != nil {
+		return nil, err
+	}
+	consumer := event.NewAuditConsumer(client, kafka.Tracer, mods.Audit, event.AuditConsumerConfig{
+		BatchSize:       cfg.Audit.BatchSize,
+		MaxPollRecords:  cfg.Audit.MaxPollRecords,
+		RetryMaxBackoff: cfg.Audit.RetryMaxBackoff,
+	}, logger.Named("consumer"))
+	return &Worker{Platform: p, Modules: mods, client: client, consumer: consumer}, nil
+}
+
+// Run consumes until ctx is cancelled.
+func (w *Worker) Run(ctx context.Context) error {
+	return w.consumer.Run(ctx)
+}
+
+// Close stops the consumer client, then the platform clients.
+func (w *Worker) Close(ctx context.Context) error {
+	w.client.Close()
+	return w.Platform.Close(ctx)
+}
+
+// InitiateWorker runs the audit consumer until SIGINT/SIGTERM.
 func InitiateWorker() error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -100,35 +142,16 @@ func InitiateWorker() error {
 	}
 	defer logger.Sync() //nolint:errcheck
 
-	p, err := newPlatform(ctx, cfg, logger, workerNeeds)
+	w, err := BuildWorker(ctx, cfg, logger)
 	if err != nil {
 		return err
 	}
-	mods := newModules(cfg, p, logger)
-
-	// Temporal worker: the client's tracing interceptor is applied automatically.
-	w := worker.New(p.Temporal, cfg.Temporal.TaskQueue, worker.Options{})
-	workflow.Register(w, &workflow.Activities{Example: mods.Example})
-	if err := w.Start(); err != nil {
-		return fmt.Errorf("start temporal worker: %w", err)
-	}
-	logger.Info("temporal worker started", zap.String("task_queue", cfg.Temporal.TaskQueue))
-
-	// Kafka consumer: one handler per topic.
-	handlers := map[string]event.HandlerFunc{
-		cfg.Kafka.Topics.ExampleCreated: event.ExampleCreated(mods.Example),
-	}
-	consumerClient, err := kafka.NewConsumer(ctx, cfg.Kafka, slices.Collect(maps.Keys(handlers))...)
-	if err != nil {
-		w.Stop()
-		return err
-	}
-	consumer := event.NewConsumer(consumerClient, kafka.Tracer, handlers, logger.Named("consumer"))
 
 	g, gctx := errgroup.WithContext(ctx)
 	g.Go(func() error {
-		logger.Info("kafka consumer started", zap.Strings("topics", consumer.Topics()))
-		return consumer.Run(gctx)
+		logger.Info("audit consumer started",
+			zap.String("group", cfg.Kafka.ConsumerGroup), zap.Strings("topics", cfg.Kafka.Topics.List()))
+		return w.Run(gctx)
 	})
 	pprofSrv := startPprof(g, cfg, logger)
 
@@ -137,13 +160,11 @@ func InitiateWorker() error {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.Server.ShutdownTimeout)
 	defer cancel()
 
-	consumerClient.Close()
-	w.Stop()
 	var errs []error
 	if pprofSrv != nil {
 		errs = append(errs, pprofSrv.Shutdown(shutdownCtx))
 	}
-	errs = append(errs, g.Wait(), p.Close(shutdownCtx), shutdownTelemetry(shutdownCtx))
+	errs = append(errs, g.Wait(), w.Close(shutdownCtx), shutdownTelemetry(shutdownCtx))
 	return errors.Join(errs...)
 }
 

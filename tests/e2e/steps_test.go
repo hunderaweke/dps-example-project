@@ -1,7 +1,6 @@
 package e2e_test
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -10,17 +9,15 @@ import (
 	"time"
 
 	"github.com/cucumber/godog"
-	"github.com/google/uuid"
-	"github.com/twmb/franz-go/pkg/kgo"
+	"github.com/jackc/pgx/v5"
 )
 
 // steps holds per-scenario state. A fresh instance is created per scenario.
 type steps struct {
-	env       env
-	http      *http.Client
-	status    int
-	body      []byte
-	createdID string
+	env    env
+	http   *http.Client
+	status int
+	body   []byte
 }
 
 func newSteps(e env) *steps {
@@ -28,30 +25,18 @@ func newSteps(e env) *steps {
 }
 
 func (s *steps) register(sc *godog.ScenarioContext) {
-	sc.Step(`^I create an example with name "([^"]*)" and owner "([^"]*)"$`, s.createExample)
-	sc.Step(`^I fetch the created example$`, s.fetchCreated)
-	sc.Step(`^I fetch an example with a random id$`, s.fetchRandom)
-	sc.Step(`^I list examples$`, s.list)
+	sc.Step(`^I request "([^"]*)" "([^"]*)"$`, s.do)
 	sc.Step(`^the response status should be (\d+)$`, s.statusShouldBe)
 	sc.Step(`^the response field "([^"]*)" should be "([^"]*)"$`, s.fieldShouldBe)
-	sc.Step(`^the list should contain at least (\d+) items?$`, s.listAtLeast)
-	sc.Step(`^an example.created event should be published for the created example$`, s.eventPublished)
+	sc.Step(`^the readiness check "([^"]*)" should be "([^"]*)"$`, s.checkShouldBe)
+	sc.Step(`^the "([^"]*)" table should exist$`, s.tableExists)
 }
 
-func (s *steps) do(method, path string, body any) error {
-	var r io.Reader
-	if body != nil {
-		raw, err := json.Marshal(body)
-		if err != nil {
-			return err
-		}
-		r = bytes.NewReader(raw)
-	}
-	req, err := http.NewRequest(method, s.env.baseURL+path, r)
+func (s *steps) do(method, path string) error {
+	req, err := http.NewRequest(method, s.env.baseURL+path, nil)
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Content-Type", "application/json")
 	resp, err := s.http.Do(req)
 	if err != nil {
 		return err
@@ -60,37 +45,6 @@ func (s *steps) do(method, path string, body any) error {
 	s.status = resp.StatusCode
 	s.body, err = io.ReadAll(resp.Body)
 	return err
-}
-
-func (s *steps) createExample(name, owner string) error {
-	if err := s.do(http.MethodPost, "/v1/examples", map[string]string{"name": name, "owner_id": owner}); err != nil {
-		return err
-	}
-	if s.status == http.StatusCreated {
-		var out struct {
-			ID string `json:"id"`
-		}
-		if err := json.Unmarshal(s.body, &out); err != nil {
-			return err
-		}
-		s.createdID = out.ID
-	}
-	return nil
-}
-
-func (s *steps) fetchCreated() error {
-	if s.createdID == "" {
-		return fmt.Errorf("no example was created in this scenario")
-	}
-	return s.do(http.MethodGet, "/v1/examples/"+s.createdID, nil)
-}
-
-func (s *steps) fetchRandom() error {
-	return s.do(http.MethodGet, "/v1/examples/"+uuid.NewString(), nil)
-}
-
-func (s *steps) list() error {
-	return s.do(http.MethodGet, "/v1/examples?limit=50", nil)
 }
 
 func (s *steps) statusShouldBe(want int) error {
@@ -111,45 +65,33 @@ func (s *steps) fieldShouldBe(field, want string) error {
 	return nil
 }
 
-func (s *steps) listAtLeast(n int) error {
+func (s *steps) checkShouldBe(name, want string) error {
 	var out struct {
-		Items []json.RawMessage `json:"items"`
+		Checks map[string]string `json:"checks"`
 	}
 	if err := json.Unmarshal(s.body, &out); err != nil {
 		return err
 	}
-	if len(out.Items) < n {
-		return fmt.Errorf("expected at least %d items, got %d", n, len(out.Items))
+	if got := out.Checks[name]; got != want {
+		return fmt.Errorf("expected check %s=%q, got %q (%s)", name, want, got, s.body)
 	}
 	return nil
 }
 
-// eventPublished reads the topic from the beginning until it finds a record
-// keyed by the created example's ID.
-func (s *steps) eventPublished() error {
-	client, err := kgo.NewClient(
-		kgo.SeedBrokers(s.env.brokers...),
-		kgo.ConsumeTopics(exampleCreatedTopic),
-		kgo.ConsumeResetOffset(kgo.NewOffset().AtStart()),
-	)
+func (s *steps) tableExists(table string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	conn, err := pgx.Connect(ctx, s.env.pgURL)
 	if err != nil {
 		return err
 	}
-	defer client.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-	for ctx.Err() == nil {
-		fetches := client.PollFetches(ctx)
-		var found bool
-		fetches.EachRecord(func(r *kgo.Record) {
-			if string(r.Key) == s.createdID {
-				found = true
-			}
-		})
-		if found {
-			return nil
-		}
+	defer func() { _ = conn.Close(ctx) }()
+	var exists bool
+	if err := conn.QueryRow(ctx, `SELECT to_regclass($1) IS NOT NULL`, table).Scan(&exists); err != nil {
+		return err
 	}
-	return fmt.Errorf("no %s event for example %s", exampleCreatedTopic, s.createdID)
+	if !exists {
+		return fmt.Errorf("table %s does not exist", table)
+	}
+	return nil
 }
