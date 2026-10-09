@@ -11,7 +11,6 @@ import (
 	"github.com/username/example-service/internal/module"
 )
 
-// ExampleCreated decodes example.created records and hands them to the core.
 func ExampleCreated(example module.Example) HandlerFunc {
 	return func(ctx context.Context, rec *kgo.Record) error {
 		var ev models.ExampleCreatedEvent

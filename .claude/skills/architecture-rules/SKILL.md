@@ -58,10 +58,12 @@ These rules are enforced by `depguard` in `.golangci.yml`. Always run `make lint
   - sqlc row ↔ model in the repository;
   - SDK type ↔ model in the storage adapter.
 - Never edit generated code: `internal/storage/repository/db`, `internal/module/mocks`, `pkg/*/gen`.
+- Comments: write one only for a non-obvious *why* or contract, or for a directive. Never restate names, signatures, layer rules or what the code plainly does. The full rule is in `CLAUDE.md`.
 
 ## Checklist before finishing
 
 - [ ] `make generate` if SQL, proto or ports changed
 - [ ] `make lint` (architecture rules) passes
+- [ ] Every new comment explains something the code cannot
 - [ ] `make test` passes
 - [ ] Benchmark added or updated if a use case, endpoint, handler, activity or adapter changed (see `add-benchmark`). Run `make bench-compare` if `bench/baseline.txt` exists.

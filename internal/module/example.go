@@ -1,8 +1,3 @@
-// Package module is the application core. It declares the ports (interfaces)
-// it needs and implements the use cases on top of them. It must not import
-// transport or storage packages (gin, huma, pgx, go-redis, franz-go, temporal,
-// grpc); those are adapters that implement or call these ports and are wired
-// together in initiator/.
 package module
 
 import (
@@ -16,22 +11,15 @@ import (
 	"github.com/username/example-service/internal/const/models"
 )
 
-// ---- Inbound port (driven by router, Kafka handler, Temporal activities) ----
-
 type Example interface {
 	Create(ctx context.Context, ex models.Example) (models.Example, error)
 	Get(ctx context.Context, id uuid.UUID) (models.Example, error)
 	List(ctx context.Context, page models.Page) ([]models.Example, error)
 
-	// HandleCreated reacts to an ExampleCreatedEvent by starting processing.
 	HandleCreated(ctx context.Context, ev models.ExampleCreatedEvent) error
-	// VerifyOwner checks with the account service that the owner is active.
 	VerifyOwner(ctx context.Context, id uuid.UUID) error
-	// MarkProcessed finalizes processing: status update, audit, cache invalidation.
 	MarkProcessed(ctx context.Context, id uuid.UUID) (models.Example, error)
 }
-
-// ---- Outbound ports (implemented by adapters in internal/storage, pkg/) ----
 
 type ExampleRepository interface {
 	Create(ctx context.Context, ex models.Example) (models.Example, error)
@@ -41,7 +29,6 @@ type ExampleRepository interface {
 }
 
 type ExampleCache interface {
-	// Get returns found=false on a cache miss.
 	Get(ctx context.Context, id uuid.UUID) (ex models.Example, found bool, err error)
 	Set(ctx context.Context, ex models.Example) error
 	Delete(ctx context.Context, id uuid.UUID) error
@@ -62,8 +49,6 @@ type AccountClient interface {
 type AuditStore interface {
 	Record(ctx context.Context, entry models.AuditEntry) error
 }
-
-// ---- Implementation ----
 
 type ExampleDeps struct {
 	Repo      ExampleRepository

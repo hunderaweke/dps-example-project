@@ -1,5 +1,3 @@
-// Package models holds the domain entities. It is the innermost layer and must
-// not import any other internal package or infrastructure library.
 package models
 
 import (
@@ -15,8 +13,6 @@ const (
 	ExampleStatusProcessed ExampleStatus = "processed"
 )
 
-// Example is the domain entity. The validate tags are checked by the module
-// layer, independently of any transport-level validation.
 type Example struct {
 	ID          uuid.UUID     `json:"id"`
 	Name        string        `json:"name" validate:"required,min=3,max=100"`
@@ -27,8 +23,6 @@ type Example struct {
 	UpdatedAt   time.Time     `json:"updated_at"`
 }
 
-// ExampleCreatedEvent is published when an example is created and consumed by
-// the worker to start processing.
 type ExampleCreatedEvent struct {
 	ID      uuid.UUID `json:"id" validate:"required"`
 	OwnerID string    `json:"owner_id" validate:"required"`
@@ -41,7 +35,6 @@ type Account struct {
 	Active bool
 }
 
-// AuditEntry records something that happened to an entity (stored in Mongo).
 type AuditEntry struct {
 	EntityID  string            `bson:"entity_id"`
 	Action    string            `bson:"action"`
@@ -49,7 +42,6 @@ type AuditEntry struct {
 	CreatedAt time.Time         `bson:"created_at"`
 }
 
-// Page is a generic pagination request used across modules.
 type Page struct {
 	Limit  int32
 	Offset int32

@@ -11,7 +11,6 @@ import (
 	"github.com/username/example-service/internal/const/dto"
 )
 
-// Check reports whether one dependency is reachable.
 type Check func(ctx context.Context) error
 
 // RegisterHealth adds /healthz (liveness: the process is up) and /readyz

@@ -1,4 +1,3 @@
-// Package publisher holds event publishing adapters backed by Kafka/Redpanda.
 package publisher
 
 import (

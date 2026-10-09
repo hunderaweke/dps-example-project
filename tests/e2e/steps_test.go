@@ -124,8 +124,6 @@ func (s *steps) listAtLeast(n int) error {
 	return nil
 }
 
-// eventPublished reads the topic from the beginning until it finds a record
-// keyed by the created example's ID.
 func (s *steps) eventPublished() error {
 	client, err := kgo.NewClient(
 		kgo.SeedBrokers(s.env.brokers...),

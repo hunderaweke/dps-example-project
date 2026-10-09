@@ -1,5 +1,3 @@
-// Package postgres builds the pgx connection pool and runs migrations. It is a
-// platform client: it knows how to connect, not what to store.
 package postgres
 
 import (
@@ -39,8 +37,6 @@ func NewPool(ctx context.Context, cfg config.Postgres) (*pgxpool.Pool, error) {
 	return pool, nil
 }
 
-// Migrate applies all embedded up migrations. It is a no-op when the schema is
-// already current.
 func Migrate(databaseURL string) error {
 	src, err := iofs.New(migrations.FS, ".")
 	if err != nil {

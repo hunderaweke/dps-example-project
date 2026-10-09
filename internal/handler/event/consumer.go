@@ -1,6 +1,3 @@
-// Package event is the Kafka inbound adapter. consumer.go is the generic poll
-// loop; each <domain>.go file decodes records for one topic and calls the
-// module (core).
 package event
 
 import (
@@ -32,7 +29,6 @@ func NewConsumer(client *kgo.Client, tracer *kotel.Tracer, handlers map[string]H
 	return &Consumer{client: client, tracer: tracer, handlers: handlers, logger: logger, maxRetries: 3}
 }
 
-// Topics returns the topics this consumer has handlers for.
 func (c *Consumer) Topics() []string {
 	topics := make([]string, 0, len(c.handlers))
 	for t := range c.handlers {

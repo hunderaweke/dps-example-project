@@ -107,7 +107,6 @@ func newPlatform(ctx context.Context, cfg *config.Config, logger *zap.Logger, n 
 
 func (p *Platform) onClose(f func(context.Context) error) { p.closers = append(p.closers, f) }
 
-// Close releases clients in reverse order of creation.
 func (p *Platform) Close(ctx context.Context) error {
 	var errs []error
 	for i := len(p.closers) - 1; i >= 0; i-- {

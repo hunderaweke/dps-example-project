@@ -1,4 +1,3 @@
-// Package mongo builds the MongoDB client.
 package mongo
 
 import (

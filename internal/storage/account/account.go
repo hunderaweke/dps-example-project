@@ -1,6 +1,3 @@
-// Package account adapts the pkg/account gRPC SDK to the module.AccountClient
-// port, converting SDK types to domain models and gRPC status codes to
-// application errors.
 package account
 
 import (

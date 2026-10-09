@@ -1,7 +1,3 @@
-// Package workflow is the Temporal adapter. Workflows orchestrate; activities
-// are thin inbound adapters that call the module (core) and translate
-// application errors into Temporal retry semantics. starter.go implements the
-// module.WorkflowStarter outbound port.
 package workflow
 
 import (
@@ -21,9 +17,8 @@ import (
 
 const ProcessExampleWorkflowName = "ProcessExampleWorkflow"
 
-// ProcessExampleWorkflow verifies the owner of a new example and marks it as
-// processed. Workflow code must be deterministic: no I/O, time.Now, or rand
-// here; do that in activities.
+// Workflow code must be deterministic: no I/O, time.Now, or rand here; do
+// that in activities.
 func ProcessExampleWorkflow(ctx workflow.Context, ev models.ExampleCreatedEvent) error {
 	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
 		StartToCloseTimeout: 30 * time.Second,
@@ -77,7 +72,6 @@ func toTemporalErr(err error) error {
 	return err
 }
 
-// Register adds the workflows and activities of this package to a worker.
 func Register(w worker.Registry, acts *Activities) {
 	w.RegisterWorkflowWithOptions(ProcessExampleWorkflow, workflow.RegisterOptions{Name: ProcessExampleWorkflowName})
 	w.RegisterActivity(acts)

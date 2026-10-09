@@ -1,6 +1,3 @@
-// Package initiator is the composition root: the only place that knows every
-// concrete type. It loads config, builds platform clients, wires adapters into
-// modules, and starts the API or worker process.
 package initiator
 
 import (
@@ -26,8 +23,6 @@ func isDevelopment(cfg *config.Config) bool {
 	return env == "" || env == "development" || env == "dev" || env == "local"
 }
 
-// NewLogger returns a human friendly console logger in development and a JSON
-// logger everywhere else.
 func NewLogger(cfg *config.Config) (*zap.Logger, error) {
 	var zc zap.Config
 	if isDevelopment(cfg) {

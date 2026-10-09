@@ -1,4 +1,3 @@
-// Package cache holds cache adapters backed by Valkey (via go-redis).
 package cache
 
 import (

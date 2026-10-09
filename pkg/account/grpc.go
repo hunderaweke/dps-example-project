@@ -1,7 +1,3 @@
-// Package account is a reusable gRPC client SDK for the account service. It
-// lives in pkg/ because it has no dependency on this service's internals and
-// could be imported by other services. Its types are converted to domain
-// models by internal/storage/account.
 package account
 
 import (

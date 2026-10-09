@@ -1,7 +1,3 @@
-// Package router is the HTTP inbound adapter. It registers Huma operations
-// (which also produce the OpenAPI document), converts DTOs to domain models,
-// calls the module (core), and maps application errors to HTTP responses. It
-// must not import internal/storage.
 package router
 
 import (

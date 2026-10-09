@@ -1,5 +1,3 @@
-// Package temporal builds the Temporal client with OpenTelemetry tracing and
-// zap logging.
 package temporal
 
 import (
@@ -30,7 +28,6 @@ func NewClient(cfg config.Temporal, logger *zap.Logger) (client.Client, error) {
 	return c, nil
 }
 
-// zapLogger adapts zap to Temporal's log.Logger interface.
 type zapLogger struct{ s *zap.SugaredLogger }
 
 func (l zapLogger) Debug(msg string, kv ...any) { l.s.Debugw(msg, kv...) }

@@ -10,8 +10,6 @@ import (
 	"github.com/google/uuid"
 )
 
-// BenchmarkCreateExample measures the HTTP adapter overhead: gin routing,
-// Huma decoding + schema validation, DTO mapping and JSON encoding.
 func BenchmarkCreateExample(b *testing.B) {
 	h := newServer(stubExample{})
 	body := []byte(`{"name":"benchmark","owner_id":"acc_1","description":"load"}`)
@@ -42,8 +40,6 @@ func BenchmarkGetExample(b *testing.B) {
 	}
 }
 
-// BenchmarkListExamples measures query-param binding and encoding a page of
-// results; response size grows with limit.
 func BenchmarkListExamples(b *testing.B) {
 	h := newServer(stubExample{})
 

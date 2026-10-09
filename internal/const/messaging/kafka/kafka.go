@@ -1,5 +1,3 @@
-// Package kafka builds franz-go clients for Kafka/Redpanda with OpenTelemetry
-// hooks so trace context propagates through record headers.
 package kafka
 
 import (
@@ -20,7 +18,6 @@ func hooks() kgo.Opt {
 	return kgo.WithHooks(kotel.NewKotel(kotel.WithTracer(Tracer)).Hooks()...)
 }
 
-// NewProducer returns a client for producing records.
 func NewProducer(ctx context.Context, cfg config.Kafka) (*kgo.Client, error) {
 	client, err := kgo.NewClient(
 		kgo.SeedBrokers(cfg.Brokers...),
@@ -37,8 +34,6 @@ func NewProducer(ctx context.Context, cfg config.Kafka) (*kgo.Client, error) {
 	return client, nil
 }
 
-// NewConsumer returns a consumer-group client subscribed to topics. Offsets
-// are committed manually after a record is handled successfully.
 func NewConsumer(ctx context.Context, cfg config.Kafka, topics ...string) (*kgo.Client, error) {
 	client, err := kgo.NewClient(
 		kgo.SeedBrokers(cfg.Brokers...),

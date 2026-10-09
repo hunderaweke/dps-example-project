@@ -1,9 +1,3 @@
-// Package errors defines the application error taxonomy using errorx.
-//
-// Adapters wrap infrastructure errors into one of these types (e.g. a pgx
-// ErrNoRows becomes ErrNotFound). The module layer returns them unchanged, and
-// inbound adapters translate them via HTTPStatus. No layer outside the adapters
-// needs to know about driver-specific errors.
 package errors
 
 import (
@@ -30,7 +24,6 @@ var (
 	ErrPublish = ErrInternal.NewSubtype("publish")
 )
 
-// HTTPStatus maps an application error to an HTTP status code.
 func HTTPStatus(err error) int {
 	switch {
 	case err == nil:
@@ -52,8 +45,6 @@ func HTTPStatus(err error) int {
 	}
 }
 
-// PublicMessage returns a message that is safe to show to clients. Internal
-// errors are hidden behind a generic message.
 func PublicMessage(err error) string {
 	if HTTPStatus(err) >= http.StatusInternalServerError {
 		return "internal server error"

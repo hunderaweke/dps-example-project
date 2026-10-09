@@ -15,8 +15,7 @@ type errorMapper struct {
 	logger *zap.Logger
 }
 
-// toHuma converts an application error to an RFC 9457 problem response. 5xx
-// details are logged but never returned to the client.
+// 5xx details are logged but never returned to the client.
 func (m errorMapper) toHuma(ctx context.Context, err error) error {
 	status := apperrors.HTTPStatus(err)
 	if status >= http.StatusInternalServerError {

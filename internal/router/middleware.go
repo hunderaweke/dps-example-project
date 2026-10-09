@@ -8,8 +8,6 @@ import (
 	"go.uber.org/zap"
 )
 
-// RequestLogger logs one line per request, including the trace ID so logs can
-// be correlated with traces in Jaeger.
 func RequestLogger(logger *zap.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()

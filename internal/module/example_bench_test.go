@@ -145,9 +145,6 @@ func BenchmarkModuleList(b *testing.B) {
 	}
 }
 
-// The benchmarks below cover the worker path: Kafka event -> workflow start ->
-// activities. Each one measures one use case called by an inbound adapter.
-
 func BenchmarkModuleHandleCreated(b *testing.B) {
 	sut := module.NewExample(module.ExampleDeps{Workflows: nopStarter{}})
 	ctx := context.Background()

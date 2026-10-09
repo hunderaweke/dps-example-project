@@ -19,7 +19,6 @@ type audit struct {
 
 var _ module.AuditStore = (*audit)(nil)
 
-// NewAudit is the MongoDB adapter for the AuditStore port.
 func NewAudit(db *mongo.Database) module.AuditStore {
 	return &audit{coll: db.Collection(auditCollection)}
 }

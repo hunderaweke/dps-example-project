@@ -94,8 +94,6 @@ type Telemetry struct {
 	SampleRatio  float64 `koanf:"sample_ratio"`
 }
 
-// Load reads the YAML file at CONFIG_PATH (default config/config.yaml) and
-// applies APP_* environment overrides on top of it.
 func Load() (*Config, error) {
 	k := koanf.New(".")
 
@@ -112,7 +110,6 @@ func Load() (*Config, error) {
 		TransformFunc: func(key, value string) (string, any) {
 			key = strings.ToLower(strings.TrimPrefix(key, envPrefix))
 			key = strings.ReplaceAll(key, "__", ".")
-			// Comma separated values become lists (brokers, cors origins).
 			if strings.Contains(value, ",") {
 				return key, strings.Split(value, ",")
 			}

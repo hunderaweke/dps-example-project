@@ -15,8 +15,6 @@ import (
 	"github.com/username/example-service/internal/router"
 )
 
-// newHTTPHandler builds the gin engine, global middleware and Huma API, and
-// registers every route.
 func newHTTPHandler(cfg *config.Config, p *Platform, mods Modules, logger *zap.Logger) http.Handler {
 	if !isDevelopment(cfg) {
 		gin.SetMode(gin.ReleaseMode)
@@ -46,7 +44,6 @@ func newHumaAPI(engine *gin.Engine, cfg *config.Config) huma.API {
 	return humagin.New(engine, hc)
 }
 
-// registerRoutes is the single list of business routes. Add new modules here.
 func registerRoutes(api huma.API, mods Modules, logger *zap.Logger) {
 	router.RegisterExample(api, mods.Example, logger.Named("router"))
 }

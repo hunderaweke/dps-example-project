@@ -1,6 +1,3 @@
-// Package repository holds persistence adapters. Each adapter implements an
-// outbound port from internal/module and translates driver errors into
-// internal/const/errors types so the core never sees pgx or mongo errors.
 package repository
 
 import (

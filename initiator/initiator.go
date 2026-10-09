@@ -41,7 +41,6 @@ func BuildAPI(ctx context.Context, cfg *config.Config, logger *zap.Logger) (*API
 	return &API{Handler: newHTTPHandler(cfg, p, mods, logger), Platform: p, Modules: mods}, nil
 }
 
-// InitiateAPI runs the HTTP API until SIGINT/SIGTERM.
 func InitiateAPI() error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -88,8 +87,6 @@ func InitiateAPI() error {
 	return errors.Join(errs...)
 }
 
-// InitiateWorker runs the Temporal worker and the Kafka consumer until
-// SIGINT/SIGTERM.
 func InitiateWorker() error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -114,7 +111,6 @@ func InitiateWorker() error {
 	}
 	logger.Info("temporal worker started", zap.String("task_queue", cfg.Temporal.TaskQueue))
 
-	// Kafka consumer: one handler per topic.
 	handlers := map[string]event.HandlerFunc{
 		cfg.Kafka.Topics.ExampleCreated: event.ExampleCreated(mods.Example),
 	}
