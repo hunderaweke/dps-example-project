@@ -9,7 +9,7 @@ import (
 	"github.com/redis/go-redis/extra/redisotel/v9"
 	"github.com/redis/go-redis/v9"
 
-	"github.com/hunderaweke/dps-audit-service/config"
+	"github.com/username/example-service/config"
 )
 
 func NewClient(ctx context.Context, cfg config.Valkey) (*redis.Client, error) {

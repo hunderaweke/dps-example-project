@@ -1,14 +1,16 @@
-# dps-audit-service Makefile. Run `make` or `make help` to list targets.
+# example-service Makefile. Run `make` or `make help` to list targets.
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
 MODULE      := $(shell go list -m)
-DB_URL      ?= postgres://postgres:postgres@localhost:5432/audit?sslmode=disable
+DB_URL      ?= postgres://postgres:postgres@localhost:5432/example?sslmode=disable
 MIGRATIONS  := internal/const/migrations
 BENCH_COUNT ?= 6
 BENCH_PKGS  ?= ./internal/...
 PKG         ?= ./internal/module
+BASE_URL    ?= http://host.docker.internal:8080
 SQLC_IMAGE  := sqlc/sqlc:1.30.0
+K6_IMAGE    := grafana/k6:1.3.0
 MIGRATE     := GOFLAGS=-tags=pgx5 go tool migrate
 
 ##@ Help
@@ -61,7 +63,8 @@ generate: sqlc proto mocks openapi ## Run all code generators
 sqlc: ## Generate type-safe query code from internal/const/queries (docker)
 	docker run --rm -v "$(CURDIR)":/src -w /src $(SQLC_IMAGE) generate
 
-proto: ## Generate Go code for the dps-contracts envelope into pkg/dpsapi/gen (buf)
+proto: ## Lint and generate gRPC code from pkg/*/proto (buf)
+	go tool buf lint
 	go tool buf generate
 
 mocks: ## Generate testify mocks for module ports (mockery)
@@ -88,7 +91,7 @@ migrate-force: ## Force the schema version after a failed migration: make migrat
 	$(MIGRATE) -path $(MIGRATIONS) -database "$(subst postgres://,pgx5://,$(DB_URL))" force $(V)
 
 ##@ Quality
-.PHONY: fmt vet lint test test-e2e test-integration test-all cover
+.PHONY: fmt vet lint test test-e2e test-all cover
 fmt: ## Format code (gofmt + goimports via golangci-lint)
 	go tool golangci-lint fmt
 
@@ -104,9 +107,6 @@ test: ## Unit tests (no docker)
 test-e2e: ## Godog e2e features against testcontainers (needs docker)
 	go test -count=1 -v ./tests/e2e/...
 
-test-integration: ## Audit consumer against Redpanda + Postgres in testcontainers (needs docker)
-	go test -count=1 -timeout 15m -v ./tests/integration
-
 test-all: ## Unit, integration and e2e tests (needs docker)
 	go test -race -count=1 ./...
 
@@ -115,7 +115,7 @@ cover: ## Unit test coverage report (opens browser)
 	go tool cover -html=coverage.out
 
 ##@ Benchmarks
-.PHONY: bench bench-baseline bench-compare bench-profile bench-storage bench-check bench-check-all bench-integration
+.PHONY: bench bench-baseline bench-compare bench-profile load-test
 bench: ## Run benchmarks into bench/current.txt (BENCH_PKGS, BENCH_COUNT)
 	@mkdir -p bench
 	go test -run='^$$' -bench=. -benchmem -count=$(BENCH_COUNT) $(BENCH_PKGS) | tee bench/current.txt
@@ -132,19 +132,10 @@ bench-profile: ## CPU+memory profile one package and open pprof: make bench-prof
 	go test -run='^$$' -bench=. -benchmem -cpuprofile=bench/cpu.out -memprofile=bench/mem.out -o bench/pkg.test $(PKG)
 	go tool pprof -http=:0 bench/pkg.test bench/cpu.out
 
-bench-check: ## Fail if any benchmark budget is broken (no docker)
-	PERF_BUDGETS=1 go test -short -run=Budget -count=1 ./internal/...
-
-bench-check-all: ## Fail if any budget is broken, incl. Postgres and Redpanda (docker)
-	PERF_BUDGETS=1 go test -run=Budget -count=1 -timeout 30m ./internal/... ./tests/integration
-
-bench-integration: ## End-to-end Redpanda -> Postgres throughput benchmarks (docker; BENCH_COUNT)
-	@mkdir -p bench
-	go test -run='^$$' -bench=. -benchmem -count=$(BENCH_COUNT) -timeout 30m ./tests/integration | tee bench/integration.txt
-
-bench-storage: ## Audit storage benchmark, YSQL + S3 Object Lock + OpenSearch (docker; SB_PROFILE=quick|full)
-	STORAGEBENCH=1 SB_PROFILE=$(or $(SB_PROFILE),quick) go test ./tests/storagebench -run TestStorageBench -count=1 -timeout 4h -v
-
+load-test: ## k6 load test against a running API (BASE_URL)
+	docker run --rm -i --add-host=host.docker.internal:host-gateway \
+		-e BASE_URL=$(BASE_URL) -v "$(CURDIR)/tests/load":/scripts \
+		$(K6_IMAGE) run /scripts/example.js
 
 ##@ Build
 .PHONY: build docker-build clean

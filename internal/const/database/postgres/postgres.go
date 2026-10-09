@@ -14,8 +14,8 @@ import (
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/jackc/pgx/v5/pgxpool"
 
-	"github.com/hunderaweke/dps-audit-service/config"
-	"github.com/hunderaweke/dps-audit-service/internal/const/migrations"
+	"github.com/username/example-service/config"
+	"github.com/username/example-service/internal/const/migrations"
 )
 
 func NewPool(ctx context.Context, cfg config.Postgres) (*pgxpool.Pool, error) {

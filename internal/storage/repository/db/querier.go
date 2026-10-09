@@ -6,14 +6,15 @@ package db
 
 import (
 	"context"
+
+	"github.com/google/uuid"
 )
 
 type Querier interface {
-	GetAuditRecord(ctx context.Context, eventID string) (AuditRecord, error)
-	// Writes a batch in one statement. A record whose event_id is already stored
-	// (redelivery or a re-published event) is skipped; the row count says how many
-	// were new.
-	InsertAuditRecords(ctx context.Context, arg InsertAuditRecordsParams) (int64, error)
+	CreateExample(ctx context.Context, arg CreateExampleParams) (Example, error)
+	GetExample(ctx context.Context, id uuid.UUID) (Example, error)
+	ListExamples(ctx context.Context, arg ListExamplesParams) ([]Example, error)
+	UpdateExampleStatus(ctx context.Context, arg UpdateExampleStatusParams) (Example, error)
 }
 
 var _ Querier = (*Queries)(nil)

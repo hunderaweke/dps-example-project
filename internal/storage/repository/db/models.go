@@ -6,26 +6,16 @@ package db
 
 import (
 	"time"
+
+	"github.com/google/uuid"
 )
 
-type AuditRecord struct {
-	EventID          string    `json:"event_id"`
-	EventType        string    `json:"event_type"`
-	AggregateID      string    `json:"aggregate_id"`
-	AggregateVersion int64     `json:"aggregate_version"`
-	Producer         string    `json:"producer"`
-	ProducerImpl     string    `json:"producer_impl"`
-	CorrelationID    string    `json:"correlation_id"`
-	CausationID      string    `json:"causation_id"`
-	ActorType        string    `json:"actor_type"`
-	ActorID          string    `json:"actor_id"`
-	ActorRole        string    `json:"actor_role"`
-	Channel          string    `json:"channel"`
-	OccurredAt       time.Time `json:"occurred_at"`
-	MetadataValid    bool      `json:"metadata_valid"`
-	KafkaTopic       string    `json:"kafka_topic"`
-	KafkaPartition   int32     `json:"kafka_partition"`
-	KafkaOffset      int64     `json:"kafka_offset"`
-	Payload          []byte    `json:"payload"`
-	RecordedAt       time.Time `json:"recorded_at"`
+type Example struct {
+	ID          uuid.UUID `json:"id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	OwnerID     string    `json:"owner_id"`
+	Status      string    `json:"status"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }

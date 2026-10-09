@@ -8,18 +8,16 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 
-	apperrors "github.com/hunderaweke/dps-audit-service/internal/const/errors"
+	apperrors "github.com/username/example-service/internal/const/errors"
 )
 
-// errorMapper is shared by the business routes; the audit read API
-// (dps.audit.v1.AuditService) is its next user.
-type errorMapper struct { //nolint:unused // used once the read API routes land
+type errorMapper struct {
 	logger *zap.Logger
 }
 
 // toHuma converts an application error to an RFC 9457 problem response. 5xx
 // details are logged but never returned to the client.
-func (m errorMapper) toHuma(ctx context.Context, err error) error { //nolint:unused // see errorMapper
+func (m errorMapper) toHuma(ctx context.Context, err error) error {
 	status := apperrors.HTTPStatus(err)
 	if status >= http.StatusInternalServerError {
 		m.logger.Error("request failed",

@@ -9,4 +9,4 @@ template: testify
 template-data:
   unroll-variadic: true
 packages:
-  github.com/hunderaweke/dps-audit-service/internal/module: {}
+  github.com/username/example-service/internal/module: {}

@@ -3,7 +3,7 @@
 #
 #   make dev-up    # start
 #   make dev-down  # stop and remove volumes
-name: dps-audit-service
+name: example-service
 
 services:
   postgres:
@@ -11,13 +11,23 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: audit
+      POSTGRES_DB: example
     ports: ["5432:5432"]
     volumes: [postgres-data:/var/lib/postgresql/data]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d audit"]
+      test: ["CMD-SHELL", "pg_isready -U postgres -d example"]
       interval: 5s
       timeout: 3s
+      retries: 10
+
+  mongo:
+    image: mongo:8
+    ports: ["27017:27017"]
+    volumes: [mongo-data:/data/db]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
       retries: 10
 
   valkey:
@@ -71,6 +81,14 @@ services:
     image: jaegertracing/jaeger:2.21.0
     ports: ["16686:16686", "4317:4317"]
 
+  # Stub of the external account gRPC service (tests/stubs/account).
+  account-stub:
+    build:
+      context: .
+      target: account-stub
+    ports: ["9090:9090"]
+
 volumes:
   postgres-data:
+  mongo-data:
   redpanda-data:

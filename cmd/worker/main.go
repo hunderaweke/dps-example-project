@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/hunderaweke/dps-audit-service/initiator"
+	"github.com/username/example-service/initiator"
 )
 
 func main() {

@@ -9,7 +9,7 @@ import (
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/plugin/kotel"
 
-	"github.com/hunderaweke/dps-audit-service/config"
+	"github.com/username/example-service/config"
 )
 
 // Tracer is shared by producer and consumer so consumers can continue the
@@ -37,22 +37,17 @@ func NewProducer(ctx context.Context, cfg config.Kafka) (*kgo.Client, error) {
 	return client, nil
 }
 
-// NewConsumer returns a consumer-group client subscribed to topics, in group
-// cfg.ConsumerGroup. Auto-commit is off: the consumer commits after handling.
-// A new group starts from the earliest offset. opts are appended, for example
-// kgo.BlockRebalanceOnPoll for consumers that must finish a poll before a
-// partition is revoked.
-func NewConsumer(ctx context.Context, cfg config.Kafka, topics []string, opts ...kgo.Opt) (*kgo.Client, error) {
-	base := []kgo.Opt{
+// NewConsumer returns a consumer-group client subscribed to topics. Offsets
+// are committed manually after a record is handled successfully.
+func NewConsumer(ctx context.Context, cfg config.Kafka, topics ...string) (*kgo.Client, error) {
+	client, err := kgo.NewClient(
 		kgo.SeedBrokers(cfg.Brokers...),
 		kgo.ConsumerGroup(cfg.ConsumerGroup),
 		kgo.ConsumeTopics(topics...),
-		kgo.ConsumeResetOffset(kgo.NewOffset().AtStart()),
 		kgo.DisableAutoCommit(),
 		kgo.AllowAutoTopicCreation(),
 		hooks(),
-	}
-	client, err := kgo.NewClient(append(base, opts...)...)
+	)
 	if err != nil {
 		return nil, fmt.Errorf("create kafka consumer: %w", err)
 	}

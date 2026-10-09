@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	"github.com/twmb/franz-go/pkg/kgo"
+	mongodrv "go.mongodb.org/mongo-driver/v2/mongo"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
@@ -16,31 +17,37 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	"go.temporal.io/sdk/client"
 	"go.uber.org/zap"
+	"google.golang.org/grpc"
 
-	"github.com/hunderaweke/dps-audit-service/config"
-	"github.com/hunderaweke/dps-audit-service/internal/const/cache/valkey"
-	"github.com/hunderaweke/dps-audit-service/internal/const/database/postgres"
-	"github.com/hunderaweke/dps-audit-service/internal/const/messaging/kafka"
-	"github.com/hunderaweke/dps-audit-service/internal/const/workflow/temporal"
+	"github.com/username/example-service/config"
+	"github.com/username/example-service/internal/const/cache/valkey"
+	"github.com/username/example-service/internal/const/database/mongo"
+	"github.com/username/example-service/internal/const/database/postgres"
+	"github.com/username/example-service/internal/const/messaging/kafka"
+	"github.com/username/example-service/internal/const/workflow/temporal"
+	"github.com/username/example-service/pkg/account"
 )
 
 // needs selects which platform clients a process connects to, so the API does
 // not depend on infrastructure only the worker uses.
 type needs struct {
-	Postgres, Valkey, Producer, Temporal bool
+	Postgres, Mongo, Valkey, Producer, Temporal, Account bool
 }
 
 var (
-	apiNeeds    = needs{Postgres: true}
-	workerNeeds = needs{Postgres: true}
+	apiNeeds    = needs{Postgres: true, Valkey: true, Producer: true}
+	workerNeeds = needs{Postgres: true, Mongo: true, Valkey: true, Temporal: true, Account: true}
 )
 
 // Platform holds infrastructure clients. Fields not selected by needs are nil.
 type Platform struct {
-	Postgres *pgxpool.Pool
-	Valkey   *redis.Client
-	Producer *kgo.Client
-	Temporal client.Client
+	Postgres    *pgxpool.Pool
+	Mongo       *mongodrv.Client
+	MongoDB     *mongodrv.Database
+	Valkey      *redis.Client
+	Producer    *kgo.Client
+	Temporal    client.Client
+	AccountConn *grpc.ClientConn
 
 	closers []func(context.Context) error
 }
@@ -65,6 +72,12 @@ func newPlatform(ctx context.Context, cfg *config.Config, logger *zap.Logger, n 
 		}
 		p.onClose(func(context.Context) error { p.Postgres.Close(); return nil })
 	}
+	if n.Mongo {
+		if p.Mongo, p.MongoDB, err = mongo.NewClient(ctx, cfg.Mongo); err != nil {
+			return nil, err
+		}
+		p.onClose(p.Mongo.Disconnect)
+	}
 	if n.Valkey {
 		if p.Valkey, err = valkey.NewClient(ctx, cfg.Valkey); err != nil {
 			return nil, err
@@ -82,6 +95,12 @@ func newPlatform(ctx context.Context, cfg *config.Config, logger *zap.Logger, n 
 			return nil, err
 		}
 		p.onClose(func(context.Context) error { p.Temporal.Close(); return nil })
+	}
+	if n.Account {
+		if p.AccountConn, err = account.Dial(cfg.Account.Address); err != nil {
+			return nil, err
+		}
+		p.onClose(func(context.Context) error { return p.AccountConn.Close() })
 	}
 	return p, nil
 }

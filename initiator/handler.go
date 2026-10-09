@@ -11,8 +11,8 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 	"go.uber.org/zap"
 
-	"github.com/hunderaweke/dps-audit-service/config"
-	"github.com/hunderaweke/dps-audit-service/internal/router"
+	"github.com/username/example-service/config"
+	"github.com/username/example-service/internal/router"
 )
 
 // newHTTPHandler builds the gin engine, global middleware and Huma API, and
@@ -42,13 +42,14 @@ func newHTTPHandler(cfg *config.Config, p *Platform, mods Modules, logger *zap.L
 
 func newHumaAPI(engine *gin.Engine, cfg *config.Config) huma.API {
 	hc := huma.DefaultConfig(cfg.App.Name, cfg.App.Version)
-	hc.Info.Description = "DPS audit service: the append-only trail of every DPS domain event."
+	hc.Info.Description = "Example service built from the hexagonal Go template."
 	return humagin.New(engine, hc)
 }
 
 // registerRoutes is the single list of business routes. Add new modules here.
-// The audit read API (dps.audit.v1.AuditService) is not exposed yet.
-func registerRoutes(_ huma.API, _ Modules, _ *zap.Logger) {}
+func registerRoutes(api huma.API, mods Modules, logger *zap.Logger) {
+	router.RegisterExample(api, mods.Example, logger.Named("router"))
+}
 
 func healthChecks(p *Platform) map[string]router.Check {
 	checks := map[string]router.Check{}

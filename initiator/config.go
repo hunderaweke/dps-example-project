@@ -10,7 +10,7 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
-	"github.com/hunderaweke/dps-audit-service/config"
+	"github.com/username/example-service/config"
 )
 
 func loadConfig() (*config.Config, error) {

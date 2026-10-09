@@ -2,18 +2,20 @@
 #
 #   make up    # build and start everything
 #   make down  # stop and remove volumes
-name: dps-audit-service
+name: example-service
 
 include:
   - compose.dev.yml
 
 x-app-env: &app-env
   APP_APP__ENVIRONMENT: docker
-  APP_POSTGRES__URL: postgres://postgres:postgres@postgres:5432/audit?sslmode=disable
+  APP_POSTGRES__URL: postgres://postgres:postgres@postgres:5432/example?sslmode=disable
   APP_POSTGRES__AUTO_MIGRATE: "false" # the migrate job owns the schema
+  APP_MONGO__URI: mongodb://mongo:27017
   APP_VALKEY__URL: redis://valkey:6379/0
   APP_KAFKA__BROKERS: redpanda:9092
   APP_TEMPORAL__HOST_PORT: temporal:7233
+  APP_ACCOUNT__ADDRESS: account-stub:9090
   APP_TELEMETRY__ENABLED: "true"
   APP_TELEMETRY__OTLP_ENDPOINT: jaeger:4317
 
@@ -23,7 +25,7 @@ services:
     volumes: [./internal/const/migrations:/migrations:ro]
     command:
       - -path=/migrations
-      - -database=postgres://postgres:postgres@postgres:5432/audit?sslmode=disable
+      - -database=postgres://postgres:postgres@postgres:5432/example?sslmode=disable
       - up
     depends_on:
       postgres: { condition: service_healthy }
@@ -47,7 +49,9 @@ services:
     environment: *app-env
     depends_on:
       migrate: { condition: service_completed_successfully }
+      mongo: { condition: service_healthy }
       valkey: { condition: service_healthy }
       redpanda: { condition: service_healthy }
       temporal: { condition: service_healthy }
+      account-stub: { condition: service_started }
     restart: unless-stopped
